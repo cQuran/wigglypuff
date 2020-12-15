@@ -4,6 +4,9 @@ distributed websocket &amp; webrtc media server
 # Design Proposals
 ![arch](assets/architecture.png)
 
+# Concurrency Design
+![arch](assets/actor-design.png)
+
 # Mobile Client
 ![arch](assets/mobile.png)
 
