@@ -64,8 +64,15 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
                 let message_value = serde_json::from_str(text.as_str());
                 match message_value {
                     Ok(message) => match message {
+                        MessageSocket::MuteUser { ref uuid, .. } => {
+                            if self.uuid == self.master_uuid || &self.uuid == uuid {
+                                message_websocket::broadcast_to_room(self, &message);
+                            } else {
+                                context.text(constants::MESSAGE_FORBIDDEN_AUTHZ.to_string());
+                                context.stop();
+                            }
+                        }
                         MessageSocket::MuteAllUser { .. }
-                        | MessageSocket::MuteUser { .. }
                         | MessageSocket::AnswerCorrection { .. }
                         | MessageSocket::MoveSura { .. }
                         | MessageSocket::ClickAya { .. } => {
@@ -77,19 +84,8 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
                             }
                         }
                         MessageSocket::OfferCorrection { ref uuid, .. } => {
-                            if &self.master_uuid != uuid {
+                            if &self.uuid != uuid {
                                 message_websocket::send_to_master(self, &message)
-                            } else {
-                                context.text(constants::MESSAGE_FORBIDDEN_AUTHZ.to_string());
-                                context.stop();
-                            }
-                        }
-                        MessageSocket::SignallingOfferSDP { ref uuid, .. }
-                        | MessageSocket::SignallingAnswerSDP { ref uuid, .. }
-                        | MessageSocket::SignallingCandidate { ref uuid, .. }
-                        | MessageSocket::Leave { ref uuid, .. } => {
-                            if &self.uuid == uuid {
-                                message_websocket::broadcast_to_room(self, &message);
                             } else {
                                 context.text(constants::MESSAGE_FORBIDDEN_AUTHZ.to_string());
                                 context.stop();

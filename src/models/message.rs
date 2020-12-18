@@ -9,27 +9,17 @@ pub struct UserStatus {
 #[derive(PartialEq, Serialize, Deserialize, Clone)]
 #[serde(tag = "action")]
 pub enum MessageSocket {
-    RequestAllOfferSDP {},
     SignallingOfferSDP {
-        uuid: String,
-        into: String,
         value: String,
     },
     SignallingAnswerSDP {
-        uuid: String,
-        into: String,
         value: String,
     },
     SignallingCandidate {
-        uuid: String,
-        into: String,
         value: String,
     },
     ClickAya {
         aya: i32,
-    },
-    Leave {
-        uuid: String,
     },
     OfferCorrection {
         uuid: String,
@@ -43,6 +33,6 @@ pub enum MessageSocket {
     },
     MuteAllUser {},
     MoveSura {
-        id_quran: int,
+        id_quran: i32,
     },
 }
