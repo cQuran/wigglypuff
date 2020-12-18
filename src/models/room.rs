@@ -49,7 +49,7 @@ impl Handler<Connect> for Room {
             .insert(connect.uuid.clone());
 
         let new_user_json = serde_json::to_string(&message::UserStatus {
-            action: "new-user".to_string(),
+            action: "NewUser".to_string(),
             uuid: connect.uuid.clone(),
         })
         .unwrap();
@@ -76,7 +76,7 @@ impl Handler<KickUser> for Room {
             .remove(&kick_user.uuid);
         self.masters.remove(&kick_user.uuid);
         let user_kicked_json = serde_json::to_string(&message::UserStatus {
-            action: "user-leave".to_string(),
+            action: "UserLeave".to_string(),
             uuid: kick_user.uuid.clone(),
         })
         .unwrap();

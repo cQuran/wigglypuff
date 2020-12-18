@@ -43,6 +43,6 @@ pub enum MessageSocket {
     },
     MuteAllUser {},
     MoveSura {
-        id_quran: String,
+        id_quran: int,
     },
 }

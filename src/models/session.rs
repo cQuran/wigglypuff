@@ -31,7 +31,7 @@ impl Actor for Session {
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
         let user_disconnected_json_message = serde_json::to_string(&UserStatus {
-            action: "user-leave".to_string(),
+            action: "UserLeave".to_string(),
             uuid: self.uuid.clone(),
         })
         .unwrap();

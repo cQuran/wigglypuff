@@ -38,7 +38,7 @@ distributed websocket &amp; webrtc media server
 
 ### request
 ```
-# Endpoint: {url}/room/create
+# Endpoint: {url}/api/room/create
 # Content-Type: application/json
 
 {
@@ -54,9 +54,7 @@ distributed websocket &amp; webrtc media server
 
 {
     "success": true,
-    "data": {
-        "room_name": str
-    }
+    "data": "room created"
 }
 ```
 
@@ -64,7 +62,7 @@ distributed websocket &amp; webrtc media server
 
 ### response
 ```
-# Endpoint: {url}/room/all
+# Endpoint: {url}/api/room/all
 # Content-Type: application/json
 # Status-Code: 200 OK
 
@@ -80,7 +78,7 @@ distributed websocket &amp; webrtc media server
 
 ### request
 ```
-# Endpoint: {url}/room/delete
+# Endpoint: {url}/api/room/delete
 # Content-Type: application/json
 
 {
@@ -96,5 +94,152 @@ distributed websocket &amp; webrtc media server
 {
     "success": true,
     "data": "room deleted"
+}
+```
+
+5. HTTP POST Kick User in Room Channel
+
+### request
+```
+# Endpoint: {url}/api/room/delete
+# Content-Type: application/json
+{
+	"uuid": str,
+	"room_name": str
+}
+```
+
+### response
+```
+# Content-Type: application/json
+# Status-Code: 200 OK
+{
+    "success": true,
+    "data": "user kicked"
+}
+```
+
+6. HTTP GET Firebase Cloud Messaging Server Token
+### response
+```
+# Endpoint: {url}/api/room/delete
+# Content-Type: application/json
+{
+    "success": true,
+    "data": {
+        "token": str
+    }
+}
+```
+
+7. Websocket Join Room
+```
+# Role: All
+# Endpoint: {url}/api/room/join/$room_name/$uuid
+# Event on User in $room_name
+{
+    "action": "NewUser",
+    "uuid": str
+}
+```
+
+8. Websocket Leave Room
+```
+# Role: All
+# Event on User in $room_name
+{
+    "action": "UserLeave",
+    "uuid": str
+}
+```
+
+9. Websocket Click Aya
+```
+# Role: Room Master
+# Event to send in Wigglypuff Server
+{
+    "action": "ClickAya", 
+    "aya": int
+}
+# Event on receive User in $room_name
+{
+    "action": "UserLeave",
+    "uuid": str
+}
+```
+
+10. Websocket Offer Correction
+```
+# Role: User in Room
+# Event to send in Wigglypuff Server
+{
+    "action": "OfferCorrection", 
+    "uuid": str
+}
+# Event on receive Room Master in $room_name
+{
+    "action": "OfferCorrection", 
+    "uuid": str
+}
+```
+
+11. Websocket Answer Correction
+```
+# Role: Room Master
+# Event to send in Wigglypuff Server
+{
+    "action": "AnswerCorrection", 
+    "uuid": str
+    "result": bool
+}
+# Event on receive User with specific uuid
+{
+    "action": "AnswerCorrection", 
+    "uuid": str
+    "result": bool
+}
+```
+
+12. Websocket Mute User in Room
+```
+# Role: Room Master
+# Event to send in Wigglypuff Server
+{
+    "action": "MuteUser", 
+    "uuid": str
+    "result": bool
+}
+# Event on receive User with specific uuid
+{
+    "action": "MuteUser", 
+    "uuid": str
+}
+```
+
+13. Websocket Mute All User in Room
+```
+# Role: Room Master
+# Event to send in Wigglypuff Server
+{
+    "action": "MuteAll", 
+}
+# Event on receive User with specific uuid
+{
+    "action": "MuteAll", 
+}
+```
+
+14. Websocket Move Sura
+```
+# Role: Room Master
+# Event to send in Wigglypuff Server
+{
+    "action": "MuteAll", 
+    "id_quran" int
+}
+# Event on receive User with specific uuid
+{
+    "action": "MuteAll", 
+    "id_quran" int
 }
 ```
