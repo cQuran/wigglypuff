@@ -5,6 +5,7 @@ mod api;
 mod config;
 mod constants;
 mod models;
+mod service;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {

@@ -1,30 +1,23 @@
 use crate::constants;
 use crate::models::{
     response::ResponseBody,
-    room::{CreateRoom, CreateRoomWithKey, DeleteRoom, GetListRoom, Room},
-    session::{Key, Session},
+    room::{CreateRoom, DeleteRoom, GetListRoom, GetMaster, Room, KickUser},
+    session::Session,
 };
 use actix::Addr;
 use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
-use rand::{distributions::Alphanumeric, Rng};
 
 pub async fn create(
     request: web::Json<CreateRoom>,
     address: web::Data<Addr<Room>>,
 ) -> Result<HttpResponse, Error> {
-    let key = rand::thread_rng()
-        .sample_iter(Alphanumeric)
-        .take(10)
-        .collect::<String>();
-
-    address.get_ref().do_send(CreateRoomWithKey {
-        key: key.clone(),
+    address.get_ref().do_send(CreateRoom {
         name: request.name.to_owned(),
         master_uuid: request.master_uuid.to_owned(),
     });
 
-    Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, Key { key: key })))
+    Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::MESSAGE_ROOM_CREATED)))
 }
 
 pub async fn list_room(address: web::Data<Addr<Room>>) -> Result<HttpResponse, Error> {
@@ -34,45 +27,61 @@ pub async fn list_room(address: web::Data<Addr<Room>>) -> Result<HttpResponse, E
 }
 
 pub async fn join(
-    name: web::Path<String>,
+    parameter: web::Path<(String, String)>,
     request: HttpRequest,
     stream: web::Payload,
     address: web::Data<Addr<Room>>,
 ) -> Result<HttpResponse, Error> {
-    let response = ws::start(
-        Session {
-            name: name.to_owned(),
-            address: address.get_ref().clone(),
-        },
-        &request,
-        stream,
-    );
-    response
+    let master_uuid = address.get_ref().send(GetMaster {room_name: parameter.0.0.clone()}).await.unwrap();
+
+    if &master_uuid != "NAN" {
+        let response = ws::start(
+            Session {
+                room_name: parameter.0.0.to_owned(),
+                uuid: parameter.0.1.to_owned(),
+                address: address.get_ref().clone(),
+                master_uuid: master_uuid
+            },
+            &request,
+            stream,
+        );
+
+        response
+    } else {
+        Ok(HttpResponse::Forbidden().json(ResponseBody::new(constants::MESSAGE_ERROR, constants::MESSAGE_ROOM_DOESNT_EXIST)))
+    }
+
 }
 
-pub async fn delete(
+pub async fn delete_room(
     request: web::Json<DeleteRoom>,
     address: web::Data<Addr<Room>>,
 ) -> Result<HttpResponse, Error> {
-    let data = address
+    let _ = address
         .get_ref()
-        .send(DeleteRoom {
+        .do_send(DeleteRoom {
             name: request.name.to_owned(),
-        })
-        .await;
+        });
 
     Ok(HttpResponse::Ok().json(ResponseBody::new(
         constants::MESSAGE_OK,
-        constants::MESSAGE_DELETED,
+        constants::MESSAGE_ROOM_DELETED,
     )))
 }
 
-pub async fn broadcast(
-    request: web::Json<CreateRoom>,
+pub async fn kick_user(
+    request: web::Json<KickUser>,
     address: web::Data<Addr<Room>>,
 ) -> Result<HttpResponse, Error> {
+    let _ = address
+        .get_ref()
+        .do_send(KickUser {
+            uuid: request.uuid.to_owned(),
+            room_name: request.room_name.to_owned(),
+        });
+
     Ok(HttpResponse::Ok().json(ResponseBody::new(
         constants::MESSAGE_OK,
-        constants::MESSAGE_OK,
+        constants::MESSAGE_USER_KICKED,
     )))
 }

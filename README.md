@@ -55,7 +55,7 @@ distributed websocket &amp; webrtc media server
 {
     "success": true,
     "data": {
-        "key": str"
+        "room_name": str
     }
 }
 ```
