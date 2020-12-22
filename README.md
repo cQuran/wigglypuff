@@ -1,6 +1,13 @@
 # wigglypuff
 distributed websocket &amp; webrtc media server
 
+# How To Run (Development Mode)
+```
+docker build -t wigglypuff .
+docker run --rm -v "$YOUR_WORKSPACE_PATH:/app" -it -p 6030:6030 -e HOST=0.0.0.0 -e PORT=6030 wigglypuff bash
+$ cargo run
+```
+
 # Design Proposals
 ![arch](assets/architecture.png)
 
