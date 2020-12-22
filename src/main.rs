@@ -11,6 +11,7 @@ mod service;
 async fn main() -> std::io::Result<()> {
     let url = config::input_arguments::config_arguments();
     let room = models::room::Room::new();
+    config::webrtc::config_gstreamer();
 
     HttpServer::new(move || {
         App::new()
