@@ -91,6 +91,14 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
                                 context.stop();
                             }
                         }
+                        // MessageSocket::CreateBroker { .. } => {
+                        //     if self.uuid == self.master_uuid {
+                        //         message_websocket::send_to_master(self, &message)
+                        //     } else {
+                        //         context.text(constants::MESSAGE_FORBIDDEN_AUTHZ.to_string());
+                        //         context.stop();
+                        //     }
+                        // }
                         _ => message_websocket::broadcast_to_room(self, &message),
                     },
                     _ => {

@@ -25,3 +25,6 @@ gstreamer = "0.16"
 gstreamer-webrtc = "0.16"
 gstreamer-video="0.16"
 gstreamer-sdp = "0.16"
+
+anyhow = "1"
+glib = "0.10.3"

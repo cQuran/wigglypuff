@@ -8,7 +8,7 @@ use log::info;
 pub struct Room {
     sessions: HashMap<String, Recipient<Message>>,
     rooms: HashMap<String, HashSet<String>>,
-    masters: HashMap<String, String>,
+    masters: HashMap<String, String>,    
 }
 
 #[derive(Message)]
