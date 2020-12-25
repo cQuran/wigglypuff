@@ -1,6 +1,6 @@
 use crate::constants;
-use actix::{Actor, ActorContext, Addr, AsyncContext, Context, Handler, Running, StreamHandler};
-use actix_derive::{Message, MessageResponse};
+use actix::{Actor, Addr, Context, Handler};
+use actix_derive::Message;
 use anyhow::Error;
 use futures::{Stream, StreamExt};
 use gstreamer;
@@ -8,8 +8,8 @@ use gstreamer::{
     prelude::{Cast, ObjectExt},
     ElementExt, ElementExtManual, GObjectExtManualGst, GstBinExt, GstBinExtManual,
 };
-use serde::{Deserialize, Serialize};
-use glib;
+use serde::Deserialize;
+
 
 use log::info;
 use std::sync::{Arc, Weak};
@@ -147,11 +147,16 @@ impl Drop for AppInner {
     }
 }
 
-pub struct WebRTC {}
+pub struct WebRTC {
+    app: App
+}
 
 impl WebRTC {
     pub fn new() -> Addr<WebRTC> {
-        let webrtc = WebRTC {};
+        let (app, bus_stream) = App::new().unwrap();
+        let mut bus_stream = bus_stream.fuse();
+
+        let webrtc = WebRTC {app: app};
         webrtc.start()
     }
 }
@@ -170,10 +175,18 @@ impl Handler<CreateWebRTCChannel> for WebRTC {
     type Result = ();
 
     fn handle(&mut self, channel: CreateWebRTCChannel, _: &mut Context<Self>) {
-        info!("START RUNNING");
-        let (app, bus_stream) = App::new().unwrap();
-        let main_loop = glib::MainLoop::new(None, false);
-        let mut bus_stream = bus_stream.fuse();
-        main_loop.run();
+        info!("OK");
+    }
+}
+
+#[derive(Message, Deserialize)]
+#[rtype(result = "()")]
+pub struct CheckRunning {}
+
+impl Handler<CheckRunning> for WebRTC {
+    type Result = ();
+
+    fn handle(&mut self, channel: CheckRunning, _: &mut Context<Self>) {
+        info!("STILL RUNNING");
     }
 }

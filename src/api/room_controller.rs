@@ -3,6 +3,7 @@ use crate::models::{
     response::ResponseBody,
     room::{CreateRoom, DeleteRoom, GetListRoom, GetMaster, Room, KickUser},
     session::Session,
+    webrtc::{WebRTC, CheckRunning},
 };
 use actix::Addr;
 use actix_web::{web, Error, HttpRequest, HttpResponse};
@@ -10,18 +11,22 @@ use actix_web_actors::ws;
 
 pub async fn create(
     request: web::Json<CreateRoom>,
-    address: web::Data<Addr<Room>>,
+    webrtc_address: web::Data<Addr<WebRTC>>,
+    room_address: web::Data<Addr<Room>>,
 ) -> Result<HttpResponse, Error> {
-    address.get_ref().do_send(CreateRoom {
+    room_address.get_ref().do_send(CreateRoom {
         name: request.name.to_owned(),
         master_uuid: request.master_uuid.to_owned(),
     });
+    
+    webrtc_address.get_ref().do_send(CheckRunning {});
+
 
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::MESSAGE_ROOM_CREATED)))
 }
 
-pub async fn list_room(address: web::Data<Addr<Room>>) -> Result<HttpResponse, Error> {
-    let data = address.get_ref().send(GetListRoom {}).await;
+pub async fn list_room(room_address: web::Data<Addr<Room>>) -> Result<HttpResponse, Error> {
+    let data = room_address.get_ref().send(GetListRoom {}).await;
 
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, data.unwrap())))
 }
@@ -30,16 +35,16 @@ pub async fn join(
     parameter: web::Path<(String, String)>,
     request: HttpRequest,
     stream: web::Payload,
-    address: web::Data<Addr<Room>>,
+    room_address: web::Data<Addr<Room>>,
 ) -> Result<HttpResponse, Error> {
-    let master_uuid = address.get_ref().send(GetMaster {room_name: parameter.0.0.clone()}).await.unwrap();
+    let master_uuid = room_address.get_ref().send(GetMaster {room_name: parameter.0.0.clone()}).await.unwrap();
 
     if &master_uuid != "NAN" {
         let response = ws::start(
             Session {
                 room_name: parameter.0.0.to_owned(),
                 uuid: parameter.0.1.to_owned(),
-                address: address.get_ref().clone(),
+                address: room_address.get_ref().clone(),
                 master_uuid: master_uuid
             },
             &request,
@@ -55,9 +60,9 @@ pub async fn join(
 
 pub async fn delete_room(
     request: web::Json<DeleteRoom>,
-    address: web::Data<Addr<Room>>,
+    room_address: web::Data<Addr<Room>>,
 ) -> Result<HttpResponse, Error> {
-    let _ = address
+    let _ = room_address
         .get_ref()
         .do_send(DeleteRoom {
             name: request.name.to_owned(),
@@ -71,9 +76,9 @@ pub async fn delete_room(
 
 pub async fn kick_user(
     request: web::Json<KickUser>,
-    address: web::Data<Addr<Room>>,
+    room_address: web::Data<Addr<Room>>,
 ) -> Result<HttpResponse, Error> {
-    let _ = address
+    let _ = room_address
         .get_ref()
         .do_send(KickUser {
             uuid: request.uuid.to_owned(),

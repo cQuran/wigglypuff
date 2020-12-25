@@ -21,6 +21,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .data(room.clone())
+            .data(webrtc.clone())
             .wrap(actix_web::middleware::Logger::default())
             .configure(config::app::config_services)
     })
