@@ -35,4 +35,8 @@ pub enum MessageSocket {
     MoveSura {
         id_quran: i32,
     },
+    ICECandidate {
+        candidate: String,
+        sdp_mline_index: u32,
+    },
 }

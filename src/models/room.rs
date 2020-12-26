@@ -35,14 +35,14 @@ impl Actor for Room {
 pub struct Connect {
     pub room_name: String,
     pub uuid: String,
-    pub address: Recipient<Message>,
+    pub room_address: Recipient<Message>,
 }
 
 impl Handler<Connect> for Room {
     type Result = ();
 
     fn handle(&mut self, connect: Connect, _: &mut Context<Self>) {
-        self.sessions.insert(connect.uuid.clone(), connect.address);
+        self.sessions.insert(connect.uuid.clone(), connect.room_address);
         self.rooms
             .entry(connect.room_name.clone())
             .or_insert_with(HashSet::new)
@@ -193,8 +193,8 @@ impl Handler<DeleteRoom> for Room {
         self.rooms.remove(&delete_room.name);
         if let Some(sessions) = self.rooms.get(&delete_room.name) {
             for session in sessions {
-                if let Some(address) = self.sessions.get(session) {
-                    let _ = address.do_send(Message(delete_room.name.to_string()));
+                if let Some(room_address) = self.sessions.get(session) {
+                    let _ = room_address.do_send(Message(delete_room.name.to_string()));
                 }
             }
         }
@@ -218,8 +218,8 @@ impl Room {
         if let Some(sessions) = self.rooms.get(room_name) {
             for session in sessions {
                 if *session != from_uuid {
-                    if let Some(address) = self.sessions.get(session) {
-                        let _ = address.do_send(Message(message.to_string()));
+                    if let Some(room_address) = self.sessions.get(session) {
+                        let _ = room_address.do_send(Message(message.to_string()));
                     }
                 }
             }
@@ -230,8 +230,8 @@ impl Room {
         if let Some(sessions) = self.rooms.get(room_name) {
             for session in sessions {
                 if *session == to_uuid {
-                    if let Some(address) = self.sessions.get(session) {
-                        let _ = address.do_send(Message(message.to_string()));
+                    if let Some(room_address) = self.sessions.get(session) {
+                        let _ = room_address.do_send(Message(message.to_string()));
                     }
                 }
             }

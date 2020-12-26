@@ -3,7 +3,7 @@ use crate::models::{
     response::ResponseBody,
     room::{CreateRoom, DeleteRoom, GetListRoom, GetMaster, Room, KickUser},
     session::Session,
-    webrtc::{WebRTC, CheckRunning},
+    webrtc::WebRTC,
 };
 use actix::Addr;
 use actix_web::{web, Error, HttpRequest, HttpResponse};
@@ -11,17 +11,12 @@ use actix_web_actors::ws;
 
 pub async fn create(
     request: web::Json<CreateRoom>,
-    webrtc_address: web::Data<Addr<WebRTC>>,
     room_address: web::Data<Addr<Room>>,
 ) -> Result<HttpResponse, Error> {
     room_address.get_ref().do_send(CreateRoom {
         name: request.name.to_owned(),
         master_uuid: request.master_uuid.to_owned(),
     });
-    
-    webrtc_address.get_ref().do_send(CheckRunning {});
-
-
     Ok(HttpResponse::Ok().json(ResponseBody::new(constants::MESSAGE_OK, constants::MESSAGE_ROOM_CREATED)))
 }
 
@@ -38,14 +33,16 @@ pub async fn join(
     room_address: web::Data<Addr<Room>>,
 ) -> Result<HttpResponse, Error> {
     let master_uuid = room_address.get_ref().send(GetMaster {room_name: parameter.0.0.clone()}).await.unwrap();
+    let webrtc_address = WebRTC::new();
 
     if &master_uuid != "NAN" {
         let response = ws::start(
             Session {
                 room_name: parameter.0.0.to_owned(),
                 uuid: parameter.0.1.to_owned(),
-                address: room_address.get_ref().clone(),
-                master_uuid: master_uuid
+                room_address: room_address.get_ref().clone(),
+                master_uuid: master_uuid,
+                webrtc_address: webrtc_address,
             },
             &request,
             stream,

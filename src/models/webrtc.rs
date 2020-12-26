@@ -2,14 +2,13 @@ use crate::constants;
 use actix::{Actor, Addr, Context, Handler};
 use actix_derive::Message;
 use anyhow::Error;
-use futures::{Stream, StreamExt};
+use futures::Stream;
 use gstreamer;
 use gstreamer::{
     prelude::{Cast, ObjectExt},
     ElementExt, ElementExtManual, GObjectExtManualGst, GstBinExt, GstBinExtManual,
 };
 use serde::Deserialize;
-
 
 use log::info;
 use std::sync::{Arc, Weak};
@@ -55,6 +54,7 @@ impl AppWeak {
 
 impl App {
     fn new() -> Result<(Self, impl Stream<Item = gstreamer::Message>), Error> {
+        info!("Creating WebRTC Connection");
         let source_webrtcbin = gstreamer::ElementFactory::make("webrtcbin", Some("webrtcbin"))
             .expect("Could not instanciate uridecodebin");
         let pipeline = gstreamer::Pipeline::new(Some("webrtc-pipeline"));
@@ -71,6 +71,25 @@ impl App {
         webrtcbin.set_property_from_str("turn-server", constants::TURN_SERVER);
         webrtcbin.set_property_from_str("bundle-policy", "max-bundle");
 
+        webrtcbin
+            .emit(
+                "add-transceiver",
+                &[
+                    &gstreamer_webrtc::WebRTCRTPTransceiverDirection::Recvonly,
+                    &gstreamer::Caps::new_simple(
+                        "application/x-rtp",
+                        &[
+                            ("media", &"audio"),
+                            ("encoding-name", &"OPUS"),
+                            ("payload", &(97i32)),
+                            ("clock-rate", &(48_000i32)),
+                            ("encoding-params", &"2"),
+                        ],
+                    ),
+                ],
+            )
+            .unwrap();
+
         let bus = pipeline.get_bus().unwrap();
         let bus_stream = bus.stream();
 
@@ -78,13 +97,11 @@ impl App {
             pipeline,
             webrtcbin,
         }));
-
         let app_clone = app.downgrade_to_weak_reference();
         app.webrtcbin
-            .connect("on-negotiation-needed", false, move |values| {
-                let _webrtc = values[0].get::<gstreamer::Element>().unwrap();
+            .connect("on-negotiation-needed", false, move |_values| {
                 let app = upgrade_weak_reference!(app_clone, None);
-                info!("START RUNNING WEBRTC");
+                app.on_negotiation_needed();
                 None
             })
             .unwrap();
@@ -102,7 +119,8 @@ impl App {
                     .unwrap();
 
                 let _app = upgrade_weak_reference!(app_clone, None);
-
+                info!("ICEEE {}", _mlineindex);
+                info!("ICEEES {}", _candidate);
                 None
             })
             .unwrap();
@@ -121,23 +139,57 @@ impl App {
 
         Ok((app, bus_stream))
     }
-    fn handle_negotiation_needed() {}
-
-    fn handle_ice_candidate(mlineindex: &String, candidate: &String) {}
-
-    fn handle_sdp(&self, types: &str, sdp: &str) -> Result<(), Error> {
-        if types == "answer" {
-            info!("Received answer:\n{}\n", sdp);
-        } else if types == "offer" {
-            info!("Received offer:\n{}\n", sdp);
-        } else {
-            info!("Sdp type is not \"answer\" but \"{}\"", types);
-        }
-        Ok(())
-    }
 
     fn downgrade_to_weak_reference(&self) -> AppWeak {
         AppWeak(Arc::downgrade(&self.0))
+    }
+
+    fn on_negotiation_needed(&self) {
+        info!("Starting Negotiation");
+        let app_clone = self.downgrade_to_weak_reference();
+        let promise = gstreamer::Promise::with_change_func(move |reply| {
+            let app = upgrade_weak_reference!(app_clone);
+            app.on_offer_created(reply);
+        });
+
+        self.webrtcbin
+            .emit("create-offer", &[&None::<gstreamer::Structure>, &promise])
+            .unwrap();
+    }
+
+    fn on_offer_created(
+        &self,
+        reply: Result<Option<&gstreamer::StructureRef>, gstreamer::PromiseError>,
+    ) {
+        match reply {
+            Ok(Some(reply)) => {
+                let offer = reply
+                    .get_value("offer")
+                    .unwrap()
+                    .get::<gstreamer_webrtc::WebRTCSessionDescription>()
+                    .expect("Invalid argument")
+                    .unwrap();
+
+                self.webrtcbin
+                    .emit(
+                        "set-local-description",
+                        &[&offer, &None::<gstreamer::Promise>],
+                    )
+                    .unwrap();
+
+                info!(
+                    "sending SDP offer to peer: {}",
+                    offer.get_sdp().as_text().unwrap()
+                );
+            }
+            Ok(None) => {
+                info!("Offer creation future got no reponse");
+            }
+            Err(err) => {
+                info!("Offer creation future got error reponse: {:?}", err);
+            }
+        };
+
     }
 }
 
@@ -148,15 +200,13 @@ impl Drop for AppInner {
 }
 
 pub struct WebRTC {
-    app: App
+    app: App,
 }
 
 impl WebRTC {
     pub fn new() -> Addr<WebRTC> {
-        let (app, bus_stream) = App::new().unwrap();
-        let mut bus_stream = bus_stream.fuse();
-
-        let webrtc = WebRTC {app: app};
+        let (app, _bus_stream) = App::new().unwrap();
+        let webrtc = WebRTC { app: app };
         webrtc.start()
     }
 }
@@ -167,14 +217,14 @@ impl Actor for WebRTC {
 
 #[derive(Message, Deserialize)]
 #[rtype(result = "()")]
-pub struct CreateWebRTCChannel {
+pub struct SessionDescription {
     pub room_name: String,
 }
 
-impl Handler<CreateWebRTCChannel> for WebRTC {
+impl Handler<SessionDescription> for WebRTC {
     type Result = ();
 
-    fn handle(&mut self, channel: CreateWebRTCChannel, _: &mut Context<Self>) {
+    fn handle(&mut self, _channel: SessionDescription, _: &mut Context<Self>) {
         info!("OK");
     }
 }
@@ -186,7 +236,29 @@ pub struct CheckRunning {}
 impl Handler<CheckRunning> for WebRTC {
     type Result = ();
 
-    fn handle(&mut self, channel: CheckRunning, _: &mut Context<Self>) {
+    fn handle(&mut self, _channel: CheckRunning, _: &mut Context<Self>) {
         info!("STILL RUNNING");
+    }
+}
+
+#[derive(Message, Deserialize)]
+#[rtype(result = "()")]
+pub struct ICECandidate {
+    pub candidate: String,
+    #[serde(rename = "sdpMLineIndex")]
+    pub sdp_mline_index: u32,
+}
+
+impl Handler<ICECandidate> for WebRTC {
+    type Result = ();
+
+    fn handle(&mut self, channel: ICECandidate, _: &mut Context<Self>) {
+        self.app
+            .webrtcbin
+            .emit(
+                "add-ice-candidate",
+                &[&channel.sdp_mline_index, &channel.candidate],
+            )
+            .unwrap();
     }
 }

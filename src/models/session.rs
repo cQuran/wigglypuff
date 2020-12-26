@@ -2,7 +2,8 @@ use crate::{
     constants,
     models::{
         message::{MessageSocket, UserStatus},
-        room::{Connect, Message, Room, Broadcast},
+        room::{Broadcast, Connect, Message, Room},
+        webrtc::WebRTC,
     },
     service::message_websocket,
 };
@@ -13,19 +14,20 @@ use actix_web_actors::ws;
 pub struct Session {
     pub room_name: String,
     pub uuid: String,
-    pub address: Addr<Room>,
+    pub room_address: Addr<Room>,
     pub master_uuid: String,
+    pub webrtc_address: Addr<WebRTC>,
 }
 
 impl Actor for Session {
     type Context = ws::WebsocketContext<Self>;
 
     fn started(&mut self, context: &mut Self::Context) {
-        let address = context.address();
-        self.address.do_send(Connect {
+        let room_address = context.address();
+        self.room_address.do_send(Connect {
             room_name: self.room_name.to_owned(),
             uuid: self.uuid.to_owned(),
-            address: address.recipient(),
+            room_address: room_address.recipient(),
         });
     }
 
@@ -35,7 +37,7 @@ impl Actor for Session {
             uuid: self.uuid.clone(),
         })
         .unwrap();
-        self.address.do_send(Broadcast {
+        self.room_address.do_send(Broadcast {
             uuid: self.uuid.to_owned(),
             room_name: self.room_name.to_owned(),
             message: user_disconnected_json_message,
@@ -91,14 +93,9 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
                                 context.stop();
                             }
                         }
-                        // MessageSocket::CreateBroker { .. } => {
-                        //     if self.uuid == self.master_uuid {
-                        //         message_websocket::send_to_master(self, &message)
-                        //     } else {
-                        //         context.text(constants::MESSAGE_FORBIDDEN_AUTHZ.to_string());
-                        //         context.stop();
-                        //     }
-                        // }
+                        MessageSocket::ICECandidate { .. } => {
+                            message_websocket::send_to_client_webrtc(self, &message);
+                        }
                         _ => message_websocket::broadcast_to_room(self, &message),
                     },
                     _ => {
