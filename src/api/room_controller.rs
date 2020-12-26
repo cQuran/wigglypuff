@@ -33,7 +33,7 @@ pub async fn join(
     room_address: web::Data<Addr<Room>>,
 ) -> Result<HttpResponse, Error> {
     let master_uuid = room_address.get_ref().send(GetMaster {room_name: parameter.0.0.clone()}).await.unwrap();
-    let webrtc_address = WebRTC::new();
+    let webrtc_address = WebRTC::new(&room_address.get_ref(), &parameter.0.0, &parameter.0.1);
 
     if &master_uuid != "NAN" {
         let response = ws::start(

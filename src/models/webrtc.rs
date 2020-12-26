@@ -1,4 +1,7 @@
-use crate::constants;
+use crate::{
+    constants,
+    models::{message::MessageSocket, room::Room, webrtc_signals::WigglypuffWebRTC},
+};
 use actix::{Actor, Addr, Context, Handler};
 use actix_derive::Message;
 use anyhow::Error;
@@ -26,16 +29,18 @@ macro_rules! upgrade_weak_reference {
     };
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct App(Arc<AppInner>);
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct AppWeak(Weak<AppInner>);
 
-#[derive(Debug)]
 struct AppInner {
     pipeline: gstreamer::Pipeline,
     webrtcbin: gstreamer::Element,
+    room_address: Addr<Room>,
+    room_name: String,
+    uuid: String,
 }
 
 impl std::ops::Deref for App {
@@ -53,7 +58,11 @@ impl AppWeak {
 }
 
 impl App {
-    fn new() -> Result<(Self, impl Stream<Item = gstreamer::Message>), Error> {
+    fn new(
+        room_address: &Addr<Room>,
+        room_name: &String,
+        uuid: &String,
+    ) -> Result<(Self, impl Stream<Item = gstreamer::Message>), Error> {
         info!("Creating WebRTC Connection");
         let source_webrtcbin = gstreamer::ElementFactory::make("webrtcbin", Some("webrtcbin"))
             .expect("Could not instanciate uridecodebin");
@@ -93,9 +102,15 @@ impl App {
         let bus = pipeline.get_bus().unwrap();
         let bus_stream = bus.stream();
 
+        let room_name = room_name.clone();
+        let uuid = uuid.clone();
+        let room_address = room_address.clone();
         let app = App(Arc::new(AppInner {
             pipeline,
             webrtcbin,
+            room_address,
+            room_name,
+            uuid,
         }));
         let app_clone = app.downgrade_to_weak_reference();
         app.webrtcbin
@@ -112,15 +127,14 @@ impl App {
                 let _webrtc = values[0]
                     .get::<gstreamer::Element>()
                     .expect("Invalid argument");
-                let _mlineindex = values[1].get_some::<u32>().expect("Invalid argument");
-                let _candidate = values[2]
+                let sdp_mline_index = values[1].get_some::<u32>().expect("Invalid argument");
+                let candidate = values[2]
                     .get::<String>()
                     .expect("Invalid argument")
                     .unwrap();
 
-                let _app = upgrade_weak_reference!(app_clone, None);
-                info!("ICEEE {}", _mlineindex);
-                info!("ICEEES {}", _candidate);
+                let app = upgrade_weak_reference!(app_clone, None);
+                app.on_ice_candidate(&candidate, &sdp_mline_index);
                 None
             })
             .unwrap();
@@ -157,6 +171,17 @@ impl App {
             .unwrap();
     }
 
+    fn on_ice_candidate(&self, candidate: &String, sdp_mline_index: &u32) {
+        self.room_address.do_send(WigglypuffWebRTC::new(
+            &self.uuid,
+            &self.room_name,
+            MessageSocket::ICECandidate {
+                candidate: candidate.to_owned(),
+                sdp_mline_index: sdp_mline_index.to_owned(),
+            },
+        ));
+    }
+
     fn on_offer_created(
         &self,
         reply: Result<Option<&gstreamer::StructureRef>, gstreamer::PromiseError>,
@@ -177,10 +202,13 @@ impl App {
                     )
                     .unwrap();
 
-                info!(
-                    "sending SDP offer to peer: {}",
-                    offer.get_sdp().as_text().unwrap()
-                );
+                self.room_address.do_send(WigglypuffWebRTC::new(
+                    &self.uuid,
+                    &self.room_name,
+                    MessageSocket::SignallingOfferSDP {
+                        value: offer.get_sdp().as_text().unwrap()
+                    },
+                ));
             }
             Ok(None) => {
                 info!("Offer creation future got no reponse");
@@ -189,7 +217,6 @@ impl App {
                 info!("Offer creation future got error reponse: {:?}", err);
             }
         };
-
     }
 }
 
@@ -204,8 +231,8 @@ pub struct WebRTC {
 }
 
 impl WebRTC {
-    pub fn new() -> Addr<WebRTC> {
-        let (app, _bus_stream) = App::new().unwrap();
+    pub fn new(room_address: &Addr<Room>, room_name: &String, uuid: &String) -> Addr<WebRTC> {
+        let (app, _bus_stream) = App::new(&room_address, &room_name, &uuid).unwrap();
         let webrtc = WebRTC { app: app };
         webrtc.start()
     }

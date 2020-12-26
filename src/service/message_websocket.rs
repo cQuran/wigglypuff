@@ -26,15 +26,12 @@ pub fn send_to_master(context: &mut Session, message: &MessageSocket) {
 
 pub fn send_to_client_webrtc(context: &mut Session, message: &MessageSocket) {
     match message {
-        MessageSocket::ICECandidate {
-            candidate,
-            sdp_mline_index,
-        } => {
+        MessageSocket::ICECandidate {candidate, sdp_mline_index} => {
             context.webrtc_address.do_send(webrtc::ICECandidate {
                 candidate: candidate.to_owned(),
                 sdp_mline_index: sdp_mline_index.to_owned(),
             });
-        }
+        },
         _ => {
             info!("INCORRECT PATTERN");
         }

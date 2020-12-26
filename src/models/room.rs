@@ -1,14 +1,14 @@
-use crate::models::message;
+use crate::models::{message, webrtc_signals::WigglypuffWebRTC};
 use actix::{Actor, Addr, Context, Handler, Recipient};
 use actix_derive::{Message, MessageResponse};
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use log::info;
 
 pub struct Room {
     sessions: HashMap<String, Recipient<Message>>,
     rooms: HashMap<String, HashSet<String>>,
-    masters: HashMap<String, String>,    
+    masters: HashMap<String, String>,
 }
 
 #[derive(Message)]
@@ -42,7 +42,8 @@ impl Handler<Connect> for Room {
     type Result = ();
 
     fn handle(&mut self, connect: Connect, _: &mut Context<Self>) {
-        self.sessions.insert(connect.uuid.clone(), connect.room_address);
+        self.sessions
+            .insert(connect.uuid.clone(), connect.room_address);
         self.rooms
             .entry(connect.room_name.clone())
             .or_insert_with(HashSet::new)
@@ -212,9 +213,21 @@ impl Handler<DeleteRoom> for Room {
     }
 }
 
+impl Handler<WigglypuffWebRTC> for Room {
+    type Result = ();
+
+    fn handle(&mut self, webrtc: WigglypuffWebRTC, _: &mut Context<Self>) {
+        let message = serde_json::to_string(&webrtc).unwrap();
+        self.send_user(&webrtc.uuid, &webrtc.room_name, &message);
+    }
+}
+
 impl Room {
     fn broadcast(&self, from_uuid: &str, room_name: &str, message: &str) {
-        info!("[BROADCAST] [ROOM: {}] [FROM UUID: {}] [MESSAGE: {}]", room_name, from_uuid, message);
+        info!(
+            "[BROADCAST] [ROOM: {}] [FROM UUID: {}] [MESSAGE: {}]",
+            room_name, from_uuid, message
+        );
         if let Some(sessions) = self.rooms.get(room_name) {
             for session in sessions {
                 if *session != from_uuid {
@@ -226,7 +239,10 @@ impl Room {
         }
     }
     fn send_user(&self, to_uuid: &str, room_name: &str, message: &str) {
-        info!("[SEND USER] [ROOM: {}] [TO UUID: {}] [MESSAGE: {}]", room_name, to_uuid, message);
+        info!(
+            "[SEND USER] [ROOM: {}] [TO UUID: {}] [MESSAGE: {}]",
+            room_name, to_uuid, message
+        );
         if let Some(sessions) = self.rooms.get(room_name) {
             for session in sessions {
                 if *session == to_uuid {
