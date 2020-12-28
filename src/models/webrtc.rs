@@ -11,7 +11,7 @@ use gstreamer::{
     prelude::{Cast, ObjectExt},
     ElementExt, ElementExtManual, GObjectExtManualGst, GstBinExt, GstBinExtManual,
 };
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 
 use log::info;
 use std::sync::{Arc, Weak};
@@ -206,7 +206,7 @@ impl App {
                     &self.uuid,
                     &self.room_name,
                     MessageSocket::SignallingOfferSDP {
-                        value: offer.get_sdp().as_text().unwrap()
+                        value: offer.get_sdp().as_text().unwrap(),
                     },
                 ));
             }
@@ -242,7 +242,7 @@ impl Actor for WebRTC {
     type Context = Context<Self>;
 }
 
-#[derive(Message, Deserialize)]
+#[derive(Message, Serialize)]
 #[rtype(result = "()")]
 pub struct SessionDescription {
     pub room_name: String,
@@ -280,12 +280,45 @@ impl Handler<ICECandidate> for WebRTC {
     type Result = ();
 
     fn handle(&mut self, channel: ICECandidate, _: &mut Context<Self>) {
+        info!("EMIT");
         self.app
             .webrtcbin
             .emit(
                 "add-ice-candidate",
                 &[&channel.sdp_mline_index, &channel.candidate],
             )
+            .unwrap();
+    }
+}
+
+#[derive(Message, Serialize)]
+#[rtype(result = "()")]
+pub struct SDPAnswer {
+    #[serde(rename = "type")]
+    pub types: String,
+    pub sdp: String,
+}
+
+impl Handler<SDPAnswer> for WebRTC {
+    type Result = ();
+
+    fn handle(&mut self, answer: SDPAnswer, _: &mut Context<Self>) {
+        let sdp = serde_json::to_string(&answer).unwrap();
+        let ret = gstreamer_sdp::SDPMessage::parse_buffer(sdp.as_bytes())
+            .map_err(|_| info!("Failed to parse SDP answer"))
+            .unwrap();
+        let answer = gstreamer_webrtc::WebRTCSessionDescription::new(
+            gstreamer_webrtc::WebRTCSDPType::Answer,
+            ret,
+        );
+
+        let promise = gstreamer::Promise::with_change_func(move |reply| {
+            info!("DONESSSSSSSSSSSs");
+        });
+
+        self.app
+            .webrtcbin
+            .emit("set-remote-description", &[&answer, &promise])
             .unwrap();
     }
 }

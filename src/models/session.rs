@@ -95,6 +95,9 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
                         }
                         MessageSocket::ICECandidate { .. } => {
                             message_websocket::send_to_client_webrtc(self, &message);
+                        },
+                        MessageSocket::SDPAnswer { .. } => {
+                            message_websocket::send_to_client_webrtc(self, &message);
                         }
                         _ => message_websocket::broadcast_to_room(self, &message),
                     },

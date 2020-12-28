@@ -37,6 +37,12 @@ pub enum MessageSocket {
     },
     ICECandidate {
         candidate: String,
+        #[serde(rename = "sdpMLineIndex")]
         sdp_mline_index: u32,
+    },
+    SDPAnswer {
+        #[serde(rename = "type")]
+        types: String,
+        sdp: String
     },
 }
