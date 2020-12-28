@@ -1,11 +1,11 @@
 use crate::{
     constants,
+    models,
     models::{
-        message::{MessageSocket, UserStatus},
-        room::{Broadcast, Connect, Message, Room},
-        webrtc::WebRTC,
+        message_websocket::{MessageSocketType, UserStatus},
     },
-    service::message_websocket,
+    service::{message_websocket, webrtc},
+    service,
 };
 
 use actix::{Actor, ActorContext, Addr, AsyncContext, Handler, Running, StreamHandler};
@@ -14,9 +14,9 @@ use actix_web_actors::ws;
 pub struct Session {
     pub room_name: String,
     pub uuid: String,
-    pub room_address: Addr<Room>,
+    pub room_address: Addr<service::room::Room>,
     pub master_uuid: String,
-    pub webrtc_address: Addr<WebRTC>,
+    pub webrtc_address: Addr<webrtc::WebRTC>,
 }
 
 impl Actor for Session {
@@ -24,7 +24,7 @@ impl Actor for Session {
 
     fn started(&mut self, context: &mut Self::Context) {
         let room_address = context.address();
-        self.room_address.do_send(Connect {
+        self.room_address.do_send(models::room::Connect {
             room_name: self.room_name.to_owned(),
             uuid: self.uuid.to_owned(),
             room_address: room_address.recipient(),
@@ -33,11 +33,11 @@ impl Actor for Session {
 
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
         let user_disconnected_json_message = serde_json::to_string(&UserStatus {
-            action: "UserLeave".to_string(),
-            uuid: self.uuid.clone(),
+            action: "UserLeave",
+            uuid: &self.uuid,
         })
         .unwrap();
-        self.room_address.do_send(Broadcast {
+        self.room_address.do_send(models::room::Broadcast {
             uuid: self.uuid.to_owned(),
             room_name: self.room_name.to_owned(),
             message: user_disconnected_json_message,
@@ -46,10 +46,10 @@ impl Actor for Session {
     }
 }
 
-impl Handler<Message> for Session {
+impl Handler<models::room::Message> for Session {
     type Result = ();
 
-    fn handle(&mut self, message: Message, context: &mut Self::Context) {
+    fn handle(&mut self, message: models::room::Message, context: &mut Self::Context) {
         context.text(message.0);
     }
 }
@@ -66,7 +66,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
                 let message_value = serde_json::from_str(text.as_str());
                 match message_value {
                     Ok(message) => match message {
-                        MessageSocket::MuteUser { ref uuid, .. } => {
+                        MessageSocketType::MuteUser { ref uuid, .. } => {
                             if self.uuid == self.master_uuid || &self.uuid == uuid {
                                 message_websocket::broadcast_to_room(self, &message);
                             } else {
@@ -74,10 +74,10 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
                                 context.stop();
                             }
                         }
-                        MessageSocket::MuteAllUser { .. }
-                        | MessageSocket::AnswerCorrection { .. }
-                        | MessageSocket::MoveSura { .. }
-                        | MessageSocket::ClickAya { .. } => {
+                        MessageSocketType::MuteAllUser { .. }
+                        | MessageSocketType::AnswerCorrection { .. }
+                        | MessageSocketType::MoveSura { .. }
+                        | MessageSocketType::ClickAya { .. } => {
                             if self.uuid == self.master_uuid {
                                 message_websocket::broadcast_to_room(self, &message);
                             } else {
@@ -85,7 +85,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
                                 context.stop();
                             }
                         }
-                        MessageSocket::OfferCorrection { ref uuid, .. } => {
+                        MessageSocketType::OfferCorrection { ref uuid, .. } => {
                             if &self.uuid != uuid {
                                 message_websocket::send_to_master(self, &message)
                             } else {
@@ -93,10 +93,10 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
                                 context.stop();
                             }
                         }
-                        MessageSocket::ICECandidate { .. } => {
+                        MessageSocketType::ICECandidate { .. } => {
                             message_websocket::send_to_client_webrtc(self, &message);
-                        },
-                        MessageSocket::SDPAnswer { .. } => {
+                        }
+                        MessageSocketType::SDPAnswer { .. } => {
                             message_websocket::send_to_client_webrtc(self, &message);
                         }
                         _ => message_websocket::broadcast_to_room(self, &message),

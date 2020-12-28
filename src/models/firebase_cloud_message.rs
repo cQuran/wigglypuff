@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct FCM {
-    pub token: String,
+pub struct FCM<'a> {
+    pub token: &'a str,
 }

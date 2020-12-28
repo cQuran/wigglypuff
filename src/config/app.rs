@@ -1,4 +1,6 @@
-use crate::api::{network_transversal_controller, firebase_cloud_message_controller, room_controller};
+use crate::api::{
+    firebase_cloud_message_controller, network_transversal_controller, room_controller,
+};
 use actix_web::{guard, web};
 use log::info;
 
@@ -23,11 +25,11 @@ pub fn config_services(config: &mut web::ServiceConfig) {
                     ),
                 )
                 .service(web::scope("/firebase_cloud_message").service(
-                    web::scope("/info").service(
-                        web::resource("").route(
-                            web::get().to(firebase_cloud_message_controller::get_firebase_cloud_message_token),
+                    web::scope("/info").service(web::resource("").route(
+                        web::get().to(
+                            firebase_cloud_message_controller::get_firebase_cloud_message_token,
                         ),
-                    ),
+                    )),
                 ))
                 .service(
                     web::scope("/room")
@@ -56,7 +58,7 @@ pub fn config_services(config: &mut web::ServiceConfig) {
                         )
                         .service(web::scope("/info").service(
                             web::resource("").route(web::get().to(room_controller::list_room)),
-                        ))
+                        )),
                 ),
         ),
     );

@@ -1,14 +1,14 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
-pub struct UserStatus {
-    pub action: String,
-    pub uuid: String,
+pub struct UserStatus<'a> {
+    pub action: &'a str,
+    pub uuid: &'a str,
 }
 
 #[derive(PartialEq, Serialize, Deserialize, Clone)]
 #[serde(tag = "action")]
-pub enum MessageSocket {
+pub enum MessageSocketType {
     SignallingOfferSDP {
         value: String,
     },
@@ -43,6 +43,6 @@ pub enum MessageSocket {
     SDPAnswer {
         #[serde(rename = "type")]
         types: String,
-        sdp: String
+        sdp: String,
     },
 }
