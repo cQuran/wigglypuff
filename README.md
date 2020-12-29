@@ -14,6 +14,9 @@ $ cargo run
 # Concurrency Design
 ![arch](assets/actor-design.png)
 
+# SFU Routing
+![arch](assets/routing-algorithm.png)
+
 # Mobile Client
 ![arch](assets/mobile.png)
 
