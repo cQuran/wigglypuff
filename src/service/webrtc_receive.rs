@@ -230,7 +230,11 @@ pub struct WebRTC {
 }
 
 impl WebRTC {
-    pub fn new(room_address: &Addr<service_room::Room>, room_name: &String, uuid: &String) -> Addr<WebRTC> {
+    pub fn new(
+        room_address: &Addr<service_room::Room>,
+        room_name: &String,
+        uuid: &String,
+    ) -> Addr<WebRTC> {
         let (app, _bus_stream) = App::new(&room_address, &room_name, &uuid).unwrap();
         let webrtc = WebRTC { app: app };
         webrtc.start()

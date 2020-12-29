@@ -4,7 +4,7 @@ use crate::{
     models::{
         message_websocket::{MessageSocketType, UserStatus},
     },
-    service::{message_websocket, webrtc},
+    service::{message_websocket, webrtc_receive},
     service,
 };
 
@@ -16,7 +16,7 @@ pub struct Session {
     pub uuid: String,
     pub room_address: Addr<service::room::Room>,
     pub master_uuid: String,
-    pub webrtc_address: Addr<webrtc::WebRTC>,
+    pub webrtc_address: Addr<webrtc_receive::WebRTC>,
 }
 
 impl Actor for Session {

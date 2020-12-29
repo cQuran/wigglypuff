@@ -1,7 +1,7 @@
 use crate::constants;
 use crate::models::room as models_room;
 use crate::service::room as service_room;
-use crate::service::{session, webrtc};
+use crate::service::{session, webrtc_receive};
 use crate::models::{
     response,
 };
@@ -50,7 +50,7 @@ pub async fn join(
         room_name: parameter.0.0.clone()
     } ).await.unwrap();
 
-    let webrtc_address = webrtc::WebRTC::new(
+    let webrtc_address = webrtc_receive::WebRTC::new(
         &room_address.get_ref(), 
         &parameter.0.0, 
         &parameter.0.1

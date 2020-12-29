@@ -16,7 +16,10 @@ pub fn broadcast_to_room(
     });
 }
 
-pub fn send_to_master(context: &mut session::Session, message: &message_websocket::MessageSocketType) {
+pub fn send_to_master(
+    context: &mut session::Session,
+    message: &message_websocket::MessageSocketType,
+) {
     let message = serde_json::to_string(&message).unwrap();
     context.room_address.do_send(room::SendUser {
         uuid: context.master_uuid.clone(),
