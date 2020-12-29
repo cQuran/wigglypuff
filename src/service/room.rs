@@ -1,20 +1,20 @@
 use crate::models::{message_websocket, room, webrtc};
 use actix::{Actor, Addr, Context, Handler, Recipient};
 use log::info;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 pub struct Room {
-    sessions: HashMap<String, Recipient<room::Message>>,
-    rooms: HashMap<String, HashSet<String>>,
-    masters: HashMap<String, String>,
+    sessions: BTreeMap<String, Recipient<room::Message>>,
+    rooms: BTreeMap<String, HashSet<String>>,
+    masters: BTreeMap<String, String>,
 }
 
 impl Room {
     pub fn new() -> Addr<Room> {
         let room = Room {
-            sessions: HashMap::new(),
-            rooms: HashMap::new(),
-            masters: HashMap::new(),
+            sessions: BTreeMap::new(),
+            rooms: BTreeMap::new(),
+            masters: BTreeMap::new(),
         };
         room.start()
     }
