@@ -71,9 +71,9 @@ RUN RUSTFLAGS="-C target-cpu=native" cargo install --path .
 RUN ldd /usr/local/cargo/bin/analytics-store-service | tr -s '[:blank:]' '\n' | grep '^/' | \
     xargs -I % sh -c 'mkdir -p $(dirname deps%); cp % deps%;'
 
-FROM scratch
+# FROM scratch
 
-COPY --from=builder /app/deps /
-COPY --from=builder /usr/local/cargo/bin/wigglypuff /bin/
+# COPY --from=builder /app/deps /
+# COPY --from=builder /usr/local/cargo/bin/wigglypuff /bin/
 
-ENTRYPOINT ["/bin/wigglypuff"]
+# ENTRYPOINT ["/bin/wigglypuff"]

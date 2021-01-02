@@ -171,14 +171,15 @@ impl App {
     }
 
     fn on_ice_candidate(&self, candidate: &String, sdp_mline_index: &u32) {
-        self.room_address.do_send(webrtc::WigglypuffWebRTC::new(
-            &self.uuid,
-            &self.room_name,
-            message_websocket::MessageSocketType::ICECandidate {
-                candidate: candidate.to_owned(),
-                sdp_mline_index: sdp_mline_index.to_owned(),
-            },
-        ));
+        // TODO
+        // self.room_address.do_send(webrtc::WigglypuffWebRTC::new(
+        //     &self.uuid,
+        //     &self.room_name,
+        //     message_websocket::MessageSocketType::ICECandidate {
+        //         candidate: candidate.to_owned(),
+        //         sdp_mline_index: sdp_mline_index.to_owned(),
+        //     },
+        // ));
     }
 
     fn on_offer_created(
@@ -201,13 +202,14 @@ impl App {
                     )
                     .unwrap();
 
-                self.room_address.do_send(webrtc::WigglypuffWebRTC::new(
-                    &self.uuid,
-                    &self.room_name,
-                    message_websocket::MessageSocketType::SignallingOfferSDP {
-                        value: offer.get_sdp().as_text().unwrap(),
-                    },
-                ));
+                // TODO
+                // self.room_address.do_send(webrtc::WigglypuffWebRTC::new(
+                //     &self.uuid,
+                //     &self.room_name,
+                //     message_websocket::MessageSocketType::SignallingOfferSDP {
+                //         value: offer.get_sdp().as_text().unwrap(),
+                //     },
+                // ));
             }
             Ok(None) => {
                 info!("Offer creation future got no reponse");
