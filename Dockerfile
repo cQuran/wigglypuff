@@ -61,3 +61,19 @@ RUN wget https://gstreamer.freedesktop.org/src/gst-rtsp-server/gst-rtsp-server-1
     && make install
 
 WORKDIR /app
+
+ADD Cargo.toml .
+
+ADD src src/
+
+RUN RUSTFLAGS="-C target-cpu=native" cargo install --path .
+
+RUN ldd /usr/local/cargo/bin/analytics-store-service | tr -s '[:blank:]' '\n' | grep '^/' | \
+    xargs -I % sh -c 'mkdir -p $(dirname deps%); cp % deps%;'
+
+FROM scratch
+
+COPY --from=builder /app/deps /
+COPY --from=builder /usr/local/cargo/bin/wigglypuff /bin/
+
+ENTRYPOINT ["/bin/wigglypuff"]
