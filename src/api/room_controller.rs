@@ -104,8 +104,17 @@ pub async fn delete_room(
 
 pub async fn kick_user(
     request: web::Json<models_room::KickUser>,
+    supervisor_webrtc_address: web::Data<Addr<webrtc_supervisor::Supervisor>>,
     room_address: web::Data<Addr<service_room::Room>>,
 ) -> Result<HttpResponse, Error> {
+
+    let _ = supervisor_webrtc_address
+        .get_ref()
+        .do_send(models_webrtc::DeleteLeader {
+            uuid: request.uuid.to_owned(),
+            room_name: request.room_name.to_owned(),
+        });
+
     let _ = room_address
         .get_ref()
         .do_send(models_room::KickUser {

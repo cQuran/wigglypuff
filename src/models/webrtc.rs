@@ -44,6 +44,13 @@ pub struct CreateLeader {
     pub room_address: Addr<room::Room>,
 }
 
+#[derive(Message, Clone)]
+#[rtype(result = "()")]
+pub struct DeleteLeader {
+    pub uuid: String,
+    pub room_name: String,
+}
+
 #[derive(Message, Serialize, Deserialize)]
 #[rtype(result = "()")]
 pub struct WigglypuffWebRTC {

@@ -63,3 +63,15 @@ impl Handler<webrtc::ICECandidate> for Supervisor {
         }
     }
 }
+
+impl Handler<webrtc::DeleteLeader> for Supervisor {
+    type Result = ();
+
+    fn handle(&mut self, delete_reader: webrtc::DeleteLeader, _: &mut Context<Self>) {
+        info!("DELETE LEADER [UUID: {}]", delete_reader.uuid);
+        if let Some(leader_address) = self.leader.get(&delete_reader.room_name) {
+            leader_address.do_send(delete_reader.clone());
+        }
+        self.leader.remove(&delete_reader.uuid);
+    }
+}

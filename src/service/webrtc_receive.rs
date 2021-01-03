@@ -3,13 +3,12 @@ use crate::{
     constants,
     models::{message_websocket, webrtc},
 };
-use actix::{Actor, Addr, Handler};
+use actix::{Actor, ActorContext, Addr, Handler};
 use anyhow::{Context, Error};
 use gstreamer;
 use gstreamer::{
     prelude::{Cast, ObjectExt},
-    ElementExt, ElementExtManual, GObjectExtManualGst, GstBinExt, PadExt,
-    PadExtManual,
+    ElementExt, ElementExtManual, GObjectExtManualGst, GstBinExt, PadExt, PadExtManual,
 };
 
 use log::info;
@@ -382,5 +381,17 @@ impl Handler<webrtc::ICECandidate> for WebRTC {
                 &[&channel.sdp_mline_index, &channel.candidate],
             )
             .unwrap();
+    }
+}
+
+impl Handler<webrtc::DeleteLeader> for WebRTC {
+    type Result = ();
+
+    fn handle(&mut self, _: webrtc::DeleteLeader, context: &mut actix::Context<Self>) {
+        self.app
+            .pipeline
+            .set_state(gstreamer::State::Null)
+            .expect("Failed to set the pipeline state to null");
+        context.stop();
     }
 }
