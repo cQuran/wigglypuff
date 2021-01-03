@@ -57,7 +57,7 @@ pub fn config_services(config: &mut web::ServiceConfig) {
                             ),
                         )
                         .service(web::scope("/info").service(
-                            web::resource("").route(web::get().to(room_controller::list_room)),
+                            web::resource("").route(web::get().to(room_controller::get_all_room)),
                         )),
                 ),
         ),

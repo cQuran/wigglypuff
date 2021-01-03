@@ -2,17 +2,6 @@ use actix::Recipient;
 use actix_derive::{Message, MessageResponse};
 use serde::{Deserialize, Serialize};
 
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct Message(pub String);
-
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct Connect {
-    pub room_name: String,
-    pub uuid: String,
-    pub room_address: Recipient<Message>,
-}
 
 #[derive(Message, Deserialize)]
 #[rtype(result = "()")]
@@ -25,6 +14,18 @@ pub struct CreateRoom {
 #[rtype(result = "String")]
 pub struct GetMaster {
     pub room_name: String,
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct Message(pub String);
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct Connect {
+    pub room_name: String,
+    pub uuid: String,
+    pub room_address: Recipient<Message>,
 }
 
 #[derive(MessageResponse, Serialize)]

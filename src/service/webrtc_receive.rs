@@ -273,7 +273,7 @@ impl App {
             .with_context(|| format!("can't link sink for stream {:?}", caps))
             .unwrap();
 
-        info!("SINK AUDIO SUCCESS");
+        info!("[SINK] [ROOM: {}] [UUID: {}] AUDIO SUCCESS", self.room_name, self.uuid);
     }
 
     fn on_offer_created(

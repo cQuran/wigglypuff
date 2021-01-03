@@ -27,7 +27,7 @@ pub async fn create(
     ))
 }
 
-pub async fn list_room(
+pub async fn get_all_room(
     room_address: web::Data<Addr<service_room::Room>>
 ) -> Result<HttpResponse, Error> {
     let rooms = room_address.get_ref().send(
