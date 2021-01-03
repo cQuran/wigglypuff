@@ -41,7 +41,7 @@ impl Handler<webrtc::SessionDescription> for Supervisor {
 
     fn handle(&mut self, session_description: webrtc::SessionDescription, _: &mut Context<Self>) {
         info!(
-            "GET SDP MESSAGE FROM [ROOM: {}] [UUID: {}], SEND TO LEADER",
+            "[GET SDP MESSAGE] [ROOM: {}] [UUID: {}], SEND TO LEADER",
             session_description.room_name, session_description.uuid
         );
         if let Some(leader_address) = self.leader.get(&session_description.room_name) {
@@ -55,7 +55,7 @@ impl Handler<webrtc::ICECandidate> for Supervisor {
 
     fn handle(&mut self, session_description: webrtc::ICECandidate, _: &mut Context<Self>) {
         info!(
-            "GET ICE MESSAGE FROM [ROOM: {}] [UUID: {}], SEND TO LEADER",
+            "[GET ICE MESSAGE] [ROOM: {}] [UUID: {}], SEND TO LEADER",
             session_description.room_name, session_description.uuid
         );
         if let Some(leader_address) = self.leader.get(&session_description.room_name) {

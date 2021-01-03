@@ -197,7 +197,10 @@ impl App {
     }
 
     fn on_negotiation_needed(&self) {
-        info!("Starting Negotiation");
+        info!(
+            "[WEBRTC] [ROOM: {}] [UUID: {}] [STARTING NEGOTIATION]",
+            self.room_name, self.uuid
+        );
         let app_clone = self.downgrade_to_weak_reference();
         let promise = gstreamer::Promise::with_change_func(move |reply| {
             let app = upgrade_weak_reference!(app_clone);
@@ -242,7 +245,7 @@ impl App {
         let name = caps.get_structure(0).unwrap().get_name();
 
         let sink = if name.starts_with("video/") {
-            info!("VIDEOOO");
+            info!("[WARN] VIDEO SINK");
             gstreamer::parse_bin_from_description(
                 "queue ! videoconvert ! videoscale ! autovideosink",
                 true,
@@ -255,7 +258,7 @@ impl App {
             )
             .unwrap()
         } else {
-            info!("VIDEOOO");
+            info!("[WARN] VIDEO SINK");
             gstreamer::parse_bin_from_description(
                 "queue ! videoconvert ! videoscale ! autovideosink",
                 true,
@@ -273,7 +276,10 @@ impl App {
             .with_context(|| format!("can't link sink for stream {:?}", caps))
             .unwrap();
 
-        info!("[SINK] [ROOM: {}] [UUID: {}] AUDIO SUCCESS", self.room_name, self.uuid);
+        info!(
+            "[SINK] [ROOM: {}] [UUID: {}] AUDIO SUCCESS",
+            self.room_name, self.uuid
+        );
     }
 
     fn on_offer_created(
@@ -347,7 +353,10 @@ impl Handler<webrtc::SessionDescription> for WebRTC {
 
     fn handle(&mut self, sdp: webrtc::SessionDescription, _: &mut actix::Context<Self>) {
         let request_sdp = serde_json::to_string(&sdp).unwrap();
-        info!("SDP {}", request_sdp);
+        info!(
+            "[GET SDP FROM SUPERVISOR] [ROOM: {}] [UUID: {}] {}",
+            self.app.room_name, self.app.uuid, request_sdp
+        );
         let ret = gstreamer_sdp::SDPMessage::parse_buffer(sdp.sdp.as_bytes())
             .map_err(|_| info!("Failed to parse SDP offer"))
             .unwrap();

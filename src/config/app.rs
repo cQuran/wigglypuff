@@ -5,7 +5,7 @@ use actix_web::{guard, web};
 use log::info;
 
 pub fn config_services(config: &mut web::ServiceConfig) {
-    info!("Configurating routes...");
+    info!("[CONFIGURATING ACTOR ROUTE]");
     config.service(
         web::scope("").service(
             web::scope("/api")
