@@ -52,13 +52,14 @@ pub async fn join(
         room_name: parameter.0.0.clone()
     } ).await.unwrap();
 
-    supervisor_webrtc_address.get_ref().send(models_webrtc::CreateLeader {
-        room_address: room_address.get_ref().clone(),
-        room_name: parameter.0.0.clone(),
-        uuid: parameter.0.1.to_owned()
-    } ).await.unwrap();
-
     if &master_uuid != "NAN" {
+            
+        supervisor_webrtc_address.get_ref().send(models_webrtc::CreateLeader {
+            room_address: room_address.get_ref().clone(),
+            room_name: parameter.0.0.clone(),
+            uuid: parameter.0.1.to_owned()
+        } ).await.unwrap();
+
         let response = ws::start(
             session::Session {
                 room_name: parameter.0.0.to_owned(),
