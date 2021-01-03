@@ -3,13 +3,13 @@ use crate::{
     constants,
     models::{message_websocket, webrtc},
 };
-use actix::{Actor, Addr, Context, Handler};
-use anyhow::Error;
-use futures::Stream;
+use actix::{Actor, Addr, Handler};
+use anyhow::{Context, Error};
 use gstreamer;
 use gstreamer::{
     prelude::{Cast, ObjectExt},
-    ElementExt, ElementExtManual, GObjectExtManualGst, GstBinExt, GstBinExtManual,
+    ElementExt, ElementExtManual, GObjectExtManualGst, GstBinExt, PadExt,
+    PadExtManual,
 };
 
 use log::info;
@@ -61,49 +61,34 @@ impl App {
         room_address: &Addr<service_room::Room>,
         room_name: &String,
         uuid: &String,
-    ) -> Result<(Self, impl Stream<Item = gstreamer::Message>), Error> {
-        info!("Creating WebRTC Connection");
-        let source_webrtcbin = gstreamer::ElementFactory::make("webrtcbin", Some("webrtcbin"))
-            .expect("Could not instanciate uridecodebin");
-        let pipeline = gstreamer::Pipeline::new(Some("webrtc-pipeline"));
+    ) -> Result<Self, Error> {
+        info!(
+            "[ROOM: {}] [UUID: {}] Creating WebRTC Receiver Instance",
+            room_name, uuid
+        );
 
-        pipeline.add_many(&[&source_webrtcbin]).unwrap();
+        let pipeline = gstreamer::parse_launch(
+            "audiotestsrc is-live=true ! opusenc ! rtpopuspay pt=97 ! webrtcbin. \
+             webrtcbin name=webrtcbin",
+        )
+        .unwrap();
+
         let pipeline = pipeline
             .downcast::<gstreamer::Pipeline>()
             .expect("not a pipeline");
+
         let webrtcbin = pipeline
             .get_by_name("webrtcbin")
             .expect("can't find webrtcbin");
 
         webrtcbin.set_property_from_str("stun-server", constants::STUN_SERVER);
-        webrtcbin.set_property_from_str("turn-server", constants::TURN_SERVER);
+        // webrtcbin.set_property_from_str("turn-server", constants::TURN_SERVER);
         webrtcbin.set_property_from_str("bundle-policy", "max-bundle");
-
-        webrtcbin
-            .emit(
-                "add-transceiver",
-                &[
-                    &gstreamer_webrtc::WebRTCRTPTransceiverDirection::Recvonly,
-                    &gstreamer::Caps::new_simple(
-                        "application/x-rtp",
-                        &[
-                            ("media", &"audio"),
-                            ("encoding-name", &"OPUS"),
-                            ("payload", &(97i32)),
-                            ("clock-rate", &(48_000i32)),
-                            ("encoding-params", &"2"),
-                        ],
-                    ),
-                ],
-            )
-            .unwrap();
-
-        let bus = pipeline.get_bus().unwrap();
-        let bus_stream = bus.stream();
 
         let room_name = room_name.clone();
         let uuid = uuid.clone();
         let room_address = room_address.clone();
+
         let app = App(Arc::new(AppInner {
             pipeline,
             webrtcbin,
@@ -111,6 +96,13 @@ impl App {
             room_name,
             uuid,
         }));
+
+        let app_clone = app.downgrade_to_weak_reference();
+        app.webrtcbin.connect_pad_added(move |_webrtc, pad| {
+            let app = upgrade_weak_reference!(app_clone);
+            app.on_incoming_stream(pad);
+        });
+
         let app_clone = app.downgrade_to_weak_reference();
         app.webrtcbin
             .connect("on-negotiation-needed", false, move |_values| {
@@ -138,6 +130,54 @@ impl App {
             })
             .unwrap();
 
+        app.webrtcbin
+            .connect_notify(Some("connection-state"), |webrtcbin, _spec| {
+                info!(
+                    "[CONNECTION STATE: {:#?}]",
+                    webrtcbin
+                        .get_property("connection-state")
+                        .unwrap()
+                        .get::<gstreamer_webrtc::WebRTCPeerConnectionState>()
+                        .unwrap()
+                );
+            });
+
+        app.webrtcbin
+            .connect_notify(Some("ice-connection-state"), |webrtcbin, _spec| {
+                info!(
+                    "[ICE CONNECTION STATE: {:#?}]",
+                    webrtcbin
+                        .get_property("ice-connection-state")
+                        .unwrap()
+                        .get::<gstreamer_webrtc::WebRTCICEConnectionState>()
+                        .unwrap()
+                );
+            });
+
+        app.webrtcbin
+            .connect_notify(Some("ice-gathering-state"), |webrtcbin, _spec| {
+                info!(
+                    "[GATHER CONNECTION STATE: {:#?}]",
+                    webrtcbin
+                        .get_property("ice-gathering-state")
+                        .unwrap()
+                        .get::<gstreamer_webrtc::WebRTCICEGatheringState>()
+                        .unwrap()
+                );
+            });
+
+        app.webrtcbin
+            .connect_notify(Some("signaling-state"), |webrtcbin, _spec| {
+                info!(
+                    "[SIGNALLING STATE: {:#?}]",
+                    webrtcbin
+                        .get_property("signaling-state")
+                        .unwrap()
+                        .get::<gstreamer_webrtc::WebRTCSignalingState>()
+                        .unwrap()
+                );
+            });
+
         app.pipeline.call_async(|pipeline| {
             if pipeline.set_state(gstreamer::State::Playing).is_err() {
                 info!("Failed to set pipeline to Playing");
@@ -150,7 +190,7 @@ impl App {
                 .expect("Couldn't set pipeline to Playing");
         });
 
-        Ok((app, bus_stream))
+        Ok(app)
     }
 
     fn downgrade_to_weak_reference(&self) -> AppWeak {
@@ -171,15 +211,70 @@ impl App {
     }
 
     fn on_ice_candidate(&self, candidate: &String, sdp_mline_index: &u32) {
-        // TODO
-        // self.room_address.do_send(webrtc::WigglypuffWebRTC::new(
-        //     &self.uuid,
-        //     &self.room_name,
-        //     message_websocket::MessageSocketType::ICECandidate {
-        //         candidate: candidate.to_owned(),
-        //         sdp_mline_index: sdp_mline_index.to_owned(),
-        //     },
-        // ));
+        self.room_address.do_send(webrtc::WigglypuffWebRTC::new(
+            &self.uuid,
+            &self.room_name,
+            message_websocket::MessageSocketType::ICECandidate {
+                candidate: candidate.to_owned(),
+                sdp_mline_index: sdp_mline_index.to_owned(),
+            },
+        ));
+    }
+
+    fn on_incoming_stream(&self, pad: &gstreamer::Pad) {
+        if pad.get_direction() == gstreamer::PadDirection::Src {
+            let decodebin = gstreamer::ElementFactory::make("decodebin", None).unwrap();
+            let app_clone = self.downgrade_to_weak_reference();
+            decodebin.connect_pad_added(move |_decodebin, pad| {
+                let app = upgrade_weak_reference!(app_clone);
+                app.on_incoming_decodebin_stream(pad);
+            });
+
+            self.pipeline.add(&decodebin).unwrap();
+            decodebin.sync_state_with_parent().unwrap();
+
+            let sinkpad = decodebin.get_static_pad("sink").unwrap();
+            pad.link(&sinkpad).unwrap();
+        }
+    }
+
+    fn on_incoming_decodebin_stream(&self, pad: &gstreamer::Pad) {
+        let caps = pad.get_current_caps().unwrap();
+        let name = caps.get_structure(0).unwrap().get_name();
+
+        let sink = if name.starts_with("video/") {
+            info!("VIDEOOO");
+            gstreamer::parse_bin_from_description(
+                "queue ! videoconvert ! videoscale ! autovideosink",
+                true,
+            )
+            .unwrap()
+        } else if name.starts_with("audio/") {
+            gstreamer::parse_bin_from_description(
+                "queue ! audioconvert ! audioresample ! autoaudiosink",
+                true,
+            )
+            .unwrap()
+        } else {
+            info!("VIDEOOO");
+            gstreamer::parse_bin_from_description(
+                "queue ! videoconvert ! videoscale ! autovideosink",
+                true,
+            )
+            .unwrap()
+        };
+
+        self.pipeline.add(&sink).unwrap();
+        sink.sync_state_with_parent()
+            .with_context(|| format!("can't start sink for stream {:?}", caps))
+            .unwrap();
+
+        let sinkpad = sink.get_static_pad("sink").unwrap();
+        pad.link(&sinkpad)
+            .with_context(|| format!("can't link sink for stream {:?}", caps))
+            .unwrap();
+
+        info!("SINK AUDIO SUCCESS");
     }
 
     fn on_offer_created(
@@ -202,14 +297,14 @@ impl App {
                     )
                     .unwrap();
 
-                // TODO
-                // self.room_address.do_send(webrtc::WigglypuffWebRTC::new(
-                //     &self.uuid,
-                //     &self.room_name,
-                //     message_websocket::MessageSocketType::SignallingOfferSDP {
-                //         value: offer.get_sdp().as_text().unwrap(),
-                //     },
-                // ));
+                self.room_address.do_send(webrtc::WigglypuffWebRTC::new(
+                    &self.uuid,
+                    &self.room_name,
+                    message_websocket::MessageSocketType::SessionDescription {
+                        types: "offer".to_string(),
+                        sdp: offer.get_sdp().as_text().unwrap(),
+                    },
+                ));
             }
             Ok(None) => {
                 info!("Offer creation future got no reponse");
@@ -237,67 +332,55 @@ impl WebRTC {
         room_name: &String,
         uuid: &String,
     ) -> Addr<WebRTC> {
-        let (app, _bus_stream) = App::new(&room_address, &room_name, &uuid).unwrap();
+        let app = App::new(&room_address, &room_name, &uuid).unwrap();
+
         let webrtc = WebRTC { app: app };
         webrtc.start()
     }
 }
 
 impl Actor for WebRTC {
-    type Context = Context<Self>;
+    type Context = actix::Context<Self>;
 }
 
 impl Handler<webrtc::SessionDescription> for WebRTC {
     type Result = ();
 
-    fn handle(&mut self, _channel: webrtc::SessionDescription, _: &mut Context<Self>) {
-        info!("OK");
-    }
-}
+    fn handle(&mut self, sdp: webrtc::SessionDescription, _: &mut actix::Context<Self>) {
+        let request_sdp = serde_json::to_string(&sdp).unwrap();
+        info!("SDP {}", request_sdp);
+        let ret = gstreamer_sdp::SDPMessage::parse_buffer(sdp.sdp.as_bytes())
+            .map_err(|_| info!("Failed to parse SDP offer"))
+            .unwrap();
+        let app_clone = self.app.downgrade_to_weak_reference();
 
-impl Handler<webrtc::CheckRunning> for WebRTC {
-    type Result = ();
+        self.app.pipeline.call_async(move |_pipeline| {
+            let app = upgrade_weak_reference!(app_clone);
 
-    fn handle(&mut self, _channel: webrtc::CheckRunning, _: &mut Context<Self>) {
-        info!("STILL RUNNING");
+            let answer = gstreamer_webrtc::WebRTCSessionDescription::new(
+                gstreamer_webrtc::WebRTCSDPType::Answer,
+                ret,
+            );
+            app.webrtcbin
+                .emit(
+                    "set-remote-description",
+                    &[&answer, &None::<gstreamer::Promise>],
+                )
+                .unwrap();
+        });
     }
 }
 
 impl Handler<webrtc::ICECandidate> for WebRTC {
     type Result = ();
 
-    fn handle(&mut self, channel: webrtc::ICECandidate, _: &mut Context<Self>) {
-        info!("EMIT");
+    fn handle(&mut self, channel: webrtc::ICECandidate, _: &mut actix::Context<Self>) {
         self.app
             .webrtcbin
             .emit(
                 "add-ice-candidate",
                 &[&channel.sdp_mline_index, &channel.candidate],
             )
-            .unwrap();
-    }
-}
-
-impl Handler<webrtc::SDPAnswer> for WebRTC {
-    type Result = ();
-
-    fn handle(&mut self, answer: webrtc::SDPAnswer, _: &mut Context<Self>) {
-        let sdp = serde_json::to_string(&answer).unwrap();
-        let ret = gstreamer_sdp::SDPMessage::parse_buffer(sdp.as_bytes())
-            .map_err(|_| info!("Failed to parse SDP answer"))
-            .unwrap();
-        let answer = gstreamer_webrtc::WebRTCSessionDescription::new(
-            gstreamer_webrtc::WebRTCSDPType::Answer,
-            ret,
-        );
-
-        let promise = gstreamer::Promise::with_change_func(move |_reply| {
-            info!("DONESSSSSSSSSSSs");
-        });
-
-        self.app
-            .webrtcbin
-            .emit("set-remote-description", &[&answer, &promise])
             .unwrap();
     }
 }

@@ -9,15 +9,6 @@ pub struct UserStatus<'a> {
 #[derive(PartialEq, Serialize, Deserialize, Clone)]
 #[serde(tag = "action")]
 pub enum MessageSocketType {
-    SignallingOfferSDP {
-        value: String,
-    },
-    SignallingAnswerSDP {
-        value: String,
-    },
-    SignallingCandidate {
-        value: String,
-    },
     ClickAya {
         aya: i32,
     },
@@ -40,9 +31,9 @@ pub enum MessageSocketType {
         #[serde(rename = "sdpMLineIndex")]
         sdp_mline_index: u32,
     },
-    SDPAnswer {
+    SessionDescription {
         #[serde(rename = "type")]
         types: String,
         sdp: String,
-    },
+    }
 }

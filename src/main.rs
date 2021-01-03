@@ -10,11 +10,14 @@ mod service;
 async fn main() -> std::io::Result<()> {
     let url = config::input_arguments::config_arguments();
     let room = service::room::Room::new();
+    let webrtc_supervisor = service::webrtc_supervisor::Supervisor::new();
+
     config::webrtc::config_gstreamer();
 
     HttpServer::new(move || {
         App::new()
             .data(room.clone())
+            .data(webrtc_supervisor.clone())
             .wrap(actix_web::middleware::Logger::default())
             .configure(config::app::config_services)
     })

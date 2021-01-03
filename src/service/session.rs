@@ -4,7 +4,7 @@ use crate::{
     models::{
         message_websocket::{MessageSocketType, UserStatus},
     },
-    service::{message_websocket, webrtc_receive},
+    service::{message_websocket, webrtc_supervisor},
     service,
 };
 
@@ -16,7 +16,7 @@ pub struct Session {
     pub uuid: String,
     pub room_address: Addr<service::room::Room>,
     pub master_uuid: String,
-    pub webrtc_address: Addr<webrtc_receive::WebRTC>,
+    pub webrtc_supervisor_address: Addr<webrtc_supervisor::Supervisor>,
 }
 
 impl Actor for Session {
@@ -96,10 +96,9 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
                         MessageSocketType::ICECandidate { .. } => {
                             message_websocket::send_to_client_webrtc(self, &message);
                         }
-                        MessageSocketType::SDPAnswer { .. } => {
+                        MessageSocketType::SessionDescription { .. } => {
                             message_websocket::send_to_client_webrtc(self, &message);
                         }
-                        _ => message_websocket::broadcast_to_room(self, &message),
                     },
                     _ => {
                         context.text(constants::MESSAGE_FORBIDDEN_AUTHZ.to_string());

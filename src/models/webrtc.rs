@@ -1,4 +1,6 @@
 use crate::models::message_websocket;
+use crate::service::room;
+use actix::Addr;
 use actix_derive::Message;
 use serde::{Deserialize, Serialize};
 
@@ -6,6 +8,10 @@ use serde::{Deserialize, Serialize};
 #[rtype(result = "()")]
 pub struct SessionDescription {
     pub room_name: String,
+    pub uuid: String,
+    #[serde(rename = "type")]
+    pub types: String,
+    pub sdp: String,
 }
 
 #[derive(Message, Deserialize)]
@@ -15,6 +21,8 @@ pub struct CheckRunning {}
 #[derive(Message, Deserialize)]
 #[rtype(result = "()")]
 pub struct ICECandidate {
+    pub room_name: String,
+    pub uuid: String,
     pub candidate: String,
     #[serde(rename = "sdpMLineIndex")]
     pub sdp_mline_index: u32,
@@ -26,6 +34,14 @@ pub struct SDPAnswer {
     #[serde(rename = "type")]
     pub types: String,
     pub sdp: String,
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct CreateLeader {
+    pub uuid: String,
+    pub room_name: String,
+    pub room_address: Addr<room::Room>,
 }
 
 #[derive(Message, Serialize, Deserialize)]

@@ -1,7 +1,8 @@
 use crate::constants;
 use crate::models::room as models_room;
 use crate::service::room as service_room;
-use crate::service::{session, webrtc_receive};
+use crate::models::webrtc as models_webrtc;
+use crate::service::{session, webrtc_supervisor};
 use crate::models::{
     response,
 };
@@ -44,17 +45,18 @@ pub async fn join(
     parameter: web::Path<(String, String)>,
     request: HttpRequest,
     stream: web::Payload,
+    supervisor_webrtc_address: web::Data<Addr<webrtc_supervisor::Supervisor>>,
     room_address: web::Data<Addr<service_room::Room>>,
 ) -> Result<HttpResponse, Error> {
     let master_uuid = room_address.get_ref().send(models_room::GetMaster {
         room_name: parameter.0.0.clone()
     } ).await.unwrap();
 
-    let webrtc_address = webrtc_receive::WebRTC::new(
-        &room_address.get_ref(), 
-        &parameter.0.0, 
-        &parameter.0.1
-    );
+    supervisor_webrtc_address.get_ref().send(models_webrtc::CreateLeader {
+        room_address: room_address.get_ref().clone(),
+        room_name: parameter.0.0.clone(),
+        uuid: parameter.0.1.to_owned()
+    } ).await.unwrap();
 
     if &master_uuid != "NAN" {
         let response = ws::start(
@@ -63,7 +65,7 @@ pub async fn join(
                 uuid: parameter.0.1.to_owned(),
                 room_address: room_address.get_ref().clone(),
                 master_uuid: master_uuid,
-                webrtc_address: webrtc_address,
+                webrtc_supervisor_address: supervisor_webrtc_address.get_ref().clone(),
             },
             &request,
             stream,
