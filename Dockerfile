@@ -13,52 +13,50 @@ RUN apt update \
 
 WORKDIR /opt
 
-RUN wget https://gstreamer.freedesktop.org/src/gstreamer/gstreamer-1.16.3.tar.xz \
-    && tar xvfJ gstreamer-1.16.3.tar.xz > /dev/null \
-    && cd gstreamer-1.16.3 \
-    && ./configure --prefix=/usr \
-    && make \
-    && make install
+ENV LD_LIBRARY_PATH /usr
 
-RUN wget https://gstreamer.freedesktop.org/src/gst-plugins-base/gst-plugins-base-1.16.3.tar.xz \
-    && tar xvfJ gst-plugins-base-1.16.3.tar.xz > /dev/null \
-    && cd gst-plugins-base-1.16.3 \
-    && ./configure --prefix=/usr \
-    && make \
-    && make install
+RUN wget https://gstreamer.freedesktop.org/src/gstreamer/gstreamer-1.18.2.tar.xz \
+    && tar xvfJ gstreamer-1.18.2.tar.xz > /dev/null \
+    && cd gstreamer-1.18.2 \
+    && meson build \
+    && ninja -C build install
 
-RUN git clone https://github.com/libnice/libnice.git --branch 0.1.16 \
+RUN wget https://gstreamer.freedesktop.org/src/gst-plugins-base/gst-plugins-base-1.18.2.tar.xz \
+    && tar xvfJ gst-plugins-base-1.18.2.tar.xz > /dev/null \
+    && cd gst-plugins-base-1.18.2 \
+    && meson build \
+    && ninja -C build install
+
+RUN git clone https://github.com/libnice/libnice.git --branch 0.1.18 \
     && cd libnice \
-    && ./autogen.sh --prefix=/usr --with-gstreamer --enable-static --enable-static-plugins --enable-shared --without-gstreamer-0.10 --disable-gtk-doc \
-    && make install
+    && meson build \
+    && ninja -C build install
 
-RUN wget https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-1.16.3.tar.xz \
-    && tar xvfJ gst-plugins-good-1.16.3.tar.xz > /dev/null \
-    && cd gst-plugins-good-1.16.3 \
-    && ./configure --prefix=/usr \
-    && make \
-    && make install
+RUN wget https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-1.18.2.tar.xz \
+    && tar xvfJ gst-plugins-good-1.18.2.tar.xz > /dev/null \
+    && cd gst-plugins-good-1.18.2 \
+    && meson build \
+    && ninja -C build install
 
-RUN wget https://gstreamer.freedesktop.org/src/gst-plugins-bad/gst-plugins-bad-1.16.3.tar.xz \
-    && tar xvfJ gst-plugins-bad-1.16.3.tar.xz > /dev/null \
-    && cd gst-plugins-bad-1.16.3 \
-    && ./configure --prefix=/usr \
-    && make \
-    && make install
+RUN wget https://gstreamer.freedesktop.org/src/gst-plugins-bad/gst-plugins-bad-1.18.2.tar.xz \
+    && tar xvfJ gst-plugins-bad-1.18.2.tar.xz > /dev/null \
+    && cd gst-plugins-bad-1.18.2 \
+    && meson build \
+    && ninja -C build install
 
-RUN wget https://gstreamer.freedesktop.org/src/gst-plugins-ugly/gst-plugins-ugly-1.16.3.tar.xz \
-    && tar xvfJ gst-plugins-ugly-1.16.3.tar.xz > /dev/null \
-    && cd gst-plugins-ugly-1.16.3 \
-    && ./configure --prefix=/usr \
-    && make \
-    && make install
+RUN wget https://gstreamer.freedesktop.org/src/gst-plugins-ugly/gst-plugins-ugly-1.18.2.tar.xz \
+    && tar xvfJ gst-plugins-ugly-1.18.2.tar.xz > /dev/null \
+    && cd gst-plugins-ugly-1.18.2 \
+    && meson build \
+    && ninja -C build install
 
-RUN wget https://gstreamer.freedesktop.org/src/gst-rtsp-server/gst-rtsp-server-1.16.3.tar.xz \
-    && tar xvfJ gst-rtsp-server-1.16.3.tar.xz > /dev/null \
-    && cd gst-rtsp-server-1.16.3 \
-    && ./configure --prefix=/usr \
-    && make \
-    && make install
+RUN wget https://gstreamer.freedesktop.org/src/gst-rtsp-server/gst-rtsp-server-1.18.2.tar.xz \
+    && tar xvfJ gst-rtsp-server-1.18.2.tar.xz > /dev/null \
+    && cd gst-rtsp-server-1.18.2 \
+    && meson build \
+    && ninja -C build install
+
+RUN ldconfig -v
 
 WORKDIR /app
 
@@ -66,10 +64,10 @@ ADD Cargo.toml .
 
 ADD src src/
 
-RUN RUSTFLAGS="-C target-cpu=native" cargo install --path .
+# RUN RUSTFLAGS="-C target-cpu=native" cargo install --path .
 
-RUN ldd /usr/local/cargo/bin/analytics-store-service | tr -s '[:blank:]' '\n' | grep '^/' | \
-    xargs -I % sh -c 'mkdir -p $(dirname deps%); cp % deps%;'
+# RUN ldd /usr/local/cargo/bin/analytics-store-service | tr -s '[:blank:]' '\n' | grep '^/' | \
+#     xargs -I % sh -c 'mkdir -p $(dirname deps%); cp % deps%;'
 
 # FROM scratch
 
