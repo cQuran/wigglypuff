@@ -54,7 +54,7 @@ pub async fn join(
 
     if &master_uuid != "NAN" {
             
-        supervisor_webrtc_address.get_ref().send(models_webrtc::CreateLeader {
+        supervisor_webrtc_address.get_ref().send(models_webrtc::RegisterUser {
             room_address: room_address.get_ref().clone(),
             room_name: parameter.0.0.clone(),
             uuid: parameter.0.1.to_owned()

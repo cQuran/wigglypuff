@@ -38,7 +38,7 @@ pub struct SDPAnswer {
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct CreateLeader {
+pub struct RegisterUser {
     pub uuid: String,
     pub room_name: String,
     pub room_address: Addr<room::Room>,

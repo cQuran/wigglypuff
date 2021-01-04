@@ -3,12 +3,12 @@ use crate::{
     constants,
     models::{message_websocket, webrtc},
 };
-use actix::Addr;
+use actix::{Addr};
 use anyhow::{Context, Error};
 use gstreamer;
 use gstreamer::{
     prelude::{Cast, ObjectExt},
-    ElementExt, ElementExtManual, GObjectExtManualGst, GstBinExt, PadExt, PadExtManual,
+    ElementExt, ElementExtManual, GstObjectExt, GObjectExtManualGst, GstBinExt, PadExt, PadExtManual,
 };
 
 use log::info;
@@ -80,7 +80,6 @@ impl Leader {
             .expect("can't find webrtcbin");
 
         webrtcbin.set_property_from_str("stun-server", constants::STUN_SERVER);
-        // webrtcbin.set_property_from_str("turn-server", constants::TURN_SERVER);
         webrtcbin.set_property_from_str("bundle-policy", "max-bundle");
 
         let room_name = room_name.clone();
@@ -96,9 +95,10 @@ impl Leader {
         }));
 
         let app_clone = app.downgrade_to_weak_reference();
-        app.webrtcbin.connect_pad_added(move |_webrtc, pad| {
+        app.webrtcbin.connect_pad_added(move |_webrtc, webrtc_pad| {
             let app = upgrade_app_weak_reference!(app_clone);
-            app.on_incoming_stream(pad);
+            info!("PAD ADDEDDD WEBRTC {}", webrtc_pad.get_name());
+            app.on_incoming_stream(webrtc_pad);
         });
 
         let app_clone = app.downgrade_to_weak_reference();
@@ -222,28 +222,30 @@ impl Leader {
         ));
     }
 
-    fn on_incoming_stream(&self, pad: &gstreamer::Pad) {
-        if pad.get_direction() == gstreamer::PadDirection::Src {
-            let decodebin = gstreamer::ElementFactory::make("decodebin", None).unwrap();
+    fn on_incoming_stream(&self, webrtc_source_pad: &gstreamer::Pad) {
+        if webrtc_source_pad.get_direction() == gstreamer::PadDirection::Src {
+            let decodebin = gstreamer::ElementFactory::make("decodebin", Some("decodebin_from_audio")).unwrap();
             let app_clone = self.downgrade_to_weak_reference();
             decodebin.connect_pad_added(move |_decodebin, pad| {
                 let app = upgrade_app_weak_reference!(app_clone);
+                info!("PAD ADDEDDD DECODEBIN {}", pad.get_name());
                 app.on_incoming_decodebin_stream(pad);
             });
 
             self.pipeline.add(&decodebin).unwrap();
             decodebin.sync_state_with_parent().unwrap();
 
-            let sinkpad = decodebin.get_static_pad("sink").unwrap();
-            pad.link(&sinkpad).unwrap();
+            let decodebin_sink_pad = decodebin.get_static_pad("sink").unwrap();
+
+            webrtc_source_pad.link(&decodebin_sink_pad).unwrap();
         }
     }
 
-    fn on_incoming_decodebin_stream(&self, pad: &gstreamer::Pad) {
-        let caps = pad.get_current_caps().unwrap();
+    fn on_incoming_decodebin_stream(&self, decodebin_pad: &gstreamer::Pad) {
+        let caps = decodebin_pad.get_current_caps().unwrap();
         let name = caps.get_structure(0).unwrap().get_name();
 
-        let sink = if name.starts_with("video/") {
+        let queue_sink = if name.starts_with("video/") {
             info!("[WARN] VIDEO SINK");
             gstreamer::parse_bin_from_description(
                 "queue ! videoconvert ! videoscale ! autovideosink",
@@ -265,13 +267,13 @@ impl Leader {
             .unwrap()
         };
 
-        self.pipeline.add(&sink).unwrap();
-        sink.sync_state_with_parent()
+        self.pipeline.add(&queue_sink).unwrap();
+        queue_sink.sync_state_with_parent()
             .with_context(|| format!("can't start sink for stream {:?}", caps))
             .unwrap();
 
-        let sinkpad = sink.get_static_pad("sink").unwrap();
-        pad.link(&sinkpad)
+        let queue_sink_pad = queue_sink.get_static_pad("sink").unwrap();
+        decodebin_pad.link(&queue_sink_pad)
             .with_context(|| format!("can't link sink for stream {:?}", caps))
             .unwrap();
 

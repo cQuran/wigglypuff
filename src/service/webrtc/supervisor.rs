@@ -21,18 +21,23 @@ impl Supervisor {
     }
 }
 
-impl Handler<webrtc::CreateLeader> for Supervisor {
+impl Handler<webrtc::RegisterUser> for Supervisor {
     type Result = ();
 
-    fn handle(&mut self, room_leader: webrtc::CreateLeader, _: &mut Context<Self>) {
-        let webrtc_leader_address = service_webrtc::WebRTC::new(
-            &room_leader.room_address.clone(),
-            &room_leader.room_name.clone(),
-            &room_leader.uuid.clone(),
-        );
+    fn handle(&mut self, room_leader: webrtc::RegisterUser, _: &mut Context<Self>) {
+        let room_name = room_leader.room_name.clone();
+        if !self.leader.contains_key(&room_name) {
+            let webrtc_leader_address = service_webrtc::WebRTC::new(
+                &room_leader.room_address.clone(),
+                &room_leader.room_name.clone(),
+                &room_leader.uuid.clone(),
+            );
 
-        self.leader
-            .insert(room_leader.room_name.clone(), webrtc_leader_address);
+            self.leader
+                .insert(room_leader.room_name.clone(), webrtc_leader_address);
+        } else {
+            info!("ADAA");
+        }
     }
 }
 
@@ -75,6 +80,6 @@ impl Handler<webrtc::DeleteLeader> for Supervisor {
         if let Some(leader_address) = self.leader.get(&delete_reader.room_name) {
             leader_address.do_send(delete_reader.clone());
         }
-        self.leader.remove(&delete_reader.uuid);
+        self.leader.remove(&delete_reader.room_name);
     }
 }
