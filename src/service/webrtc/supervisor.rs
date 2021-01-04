@@ -1,11 +1,11 @@
 use crate::models::webrtc;
-use crate::service::webrtc_receive;
+use crate::service::webrtc::webrtc as service_webrtc;
 use actix::{Actor, Addr, Context, Handler};
 use log::info;
 use std::collections::BTreeMap;
 
 pub struct Supervisor {
-    leader: BTreeMap<String, Addr<webrtc_receive::WebRTC>>,
+    leader: BTreeMap<String, Addr<service_webrtc::WebRTC>>,
 }
 
 impl Actor for Supervisor {
@@ -25,7 +25,7 @@ impl Handler<webrtc::CreateLeader> for Supervisor {
     type Result = ();
 
     fn handle(&mut self, room_leader: webrtc::CreateLeader, _: &mut Context<Self>) {
-        let webrtc_leader_address = webrtc_receive::WebRTC::new(
+        let webrtc_leader_address = service_webrtc::WebRTC::new(
             &room_leader.room_address.clone(),
             &room_leader.room_name.clone(),
             &room_leader.uuid.clone(),

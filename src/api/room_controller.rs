@@ -2,7 +2,7 @@ use crate::constants;
 use crate::models::room as models_room;
 use crate::service::room as service_room;
 use crate::models::webrtc as models_webrtc;
-use crate::service::{session, webrtc_supervisor};
+use crate::service::{session, webrtc};
 use crate::models::{
     response,
 };
@@ -45,7 +45,7 @@ pub async fn join(
     parameter: web::Path<(String, String)>,
     request: HttpRequest,
     stream: web::Payload,
-    supervisor_webrtc_address: web::Data<Addr<webrtc_supervisor::Supervisor>>,
+    supervisor_webrtc_address: web::Data<Addr<webrtc::supervisor::Supervisor>>,
     room_address: web::Data<Addr<service_room::Room>>,
 ) -> Result<HttpResponse, Error> {
     let master_uuid = room_address.get_ref().send(models_room::GetMaster {
@@ -104,7 +104,7 @@ pub async fn delete_room(
 
 pub async fn kick_user(
     request: web::Json<models_room::KickUser>,
-    supervisor_webrtc_address: web::Data<Addr<webrtc_supervisor::Supervisor>>,
+    supervisor_webrtc_address: web::Data<Addr<webrtc::supervisor::Supervisor>>,
     room_address: web::Data<Addr<service_room::Room>>,
 ) -> Result<HttpResponse, Error> {
 

@@ -3,7 +3,7 @@ use crate::{
     constants,
     models::{message_websocket, webrtc},
 };
-use actix::{Actor, ActorContext, Addr, Handler};
+use actix::{Addr};
 use anyhow::{Context, Error};
 use gstreamer;
 use gstreamer::{
@@ -14,8 +14,7 @@ use gstreamer::{
 use log::info;
 use std::sync::{Arc, Weak};
 
-#[macro_export]
-macro_rules! upgrade_weak_reference {
+macro_rules! upgrade_app_weak_reference {
     ($x:ident, $r:expr) => {{
         match $x.upgrade_to_strong_reference() {
             Some(o) => o,
@@ -23,46 +22,46 @@ macro_rules! upgrade_weak_reference {
         }
     }};
     ($x:ident) => {
-        upgrade_weak_reference!($x, ())
+        upgrade_app_weak_reference!($x, ())
     };
 }
 
-struct AppInner {
-    pipeline: gstreamer::Pipeline,
-    webrtcbin: gstreamer::Element,
-    room_address: Addr<service_room::Room>,
-    room_name: String,
-    uuid: String,
+pub struct LeaderInner {
+    pub pipeline: gstreamer::Pipeline,
+    pub webrtcbin: gstreamer::Element,
+    pub room_address: Addr<service_room::Room>,
+    pub room_name: String,
+    pub uuid: String,
 }
 
 #[derive(Clone)]
-struct App(Arc<AppInner>);
+pub struct Leader(pub Arc<LeaderInner>);
 
 #[derive(Clone)]
-struct AppWeak(Weak<AppInner>);
+pub struct LeaderWeak(pub Weak<LeaderInner>);
 
-impl std::ops::Deref for App {
-    type Target = AppInner;
+impl std::ops::Deref for Leader {
+    type Target = LeaderInner;
 
-    fn deref(&self) -> &AppInner {
+    fn deref(&self) -> &LeaderInner {
         &self.0
     }
 }
 
-impl AppWeak {
-    fn upgrade_to_strong_reference(&self) -> Option<App> {
-        self.0.upgrade().map(App)
+impl LeaderWeak {
+    pub fn upgrade_to_strong_reference(&self) -> Option<Leader> {
+        self.0.upgrade().map(Leader)
     }
 }
 
-impl App {
-    fn new(
+impl Leader {
+    pub fn new(
         room_address: &Addr<service_room::Room>,
         room_name: &String,
         uuid: &String,
     ) -> Result<Self, Error> {
         info!(
-            "[ROOM: {}] [UUID: {}] Creating WebRTC Receiver Instance",
+            "[ROOM: {}] [UUID: {}] Creating WebRTC Leader Instance",
             room_name, uuid
         );
 
@@ -88,7 +87,7 @@ impl App {
         let uuid = uuid.clone();
         let room_address = room_address.clone();
 
-        let app = App(Arc::new(AppInner {
+        let app = Leader(Arc::new(LeaderInner {
             pipeline,
             webrtcbin,
             room_address,
@@ -98,14 +97,14 @@ impl App {
 
         let app_clone = app.downgrade_to_weak_reference();
         app.webrtcbin.connect_pad_added(move |_webrtc, pad| {
-            let app = upgrade_weak_reference!(app_clone);
+            let app = upgrade_app_weak_reference!(app_clone);
             app.on_incoming_stream(pad);
         });
 
         let app_clone = app.downgrade_to_weak_reference();
         app.webrtcbin
             .connect("on-negotiation-needed", false, move |_values| {
-                let app = upgrade_weak_reference!(app_clone, None);
+                let app = upgrade_app_weak_reference!(app_clone, None);
                 app.on_negotiation_needed();
                 None
             })
@@ -123,7 +122,7 @@ impl App {
                     .expect("Invalid argument")
                     .unwrap();
 
-                let app = upgrade_weak_reference!(app_clone, None);
+                let app = upgrade_app_weak_reference!(app_clone, None);
                 app.on_ice_candidate(&candidate, &sdp_mline_index);
                 None
             })
@@ -192,8 +191,8 @@ impl App {
         Ok(app)
     }
 
-    fn downgrade_to_weak_reference(&self) -> AppWeak {
-        AppWeak(Arc::downgrade(&self.0))
+    pub fn downgrade_to_weak_reference(&self) -> LeaderWeak {
+        LeaderWeak(Arc::downgrade(&self.0))
     }
 
     fn on_negotiation_needed(&self) {
@@ -203,7 +202,7 @@ impl App {
         );
         let app_clone = self.downgrade_to_weak_reference();
         let promise = gstreamer::Promise::with_change_func(move |reply| {
-            let app = upgrade_weak_reference!(app_clone);
+            let app = upgrade_app_weak_reference!(app_clone);
             app.on_offer_created(reply);
         });
 
@@ -228,7 +227,7 @@ impl App {
             let decodebin = gstreamer::ElementFactory::make("decodebin", None).unwrap();
             let app_clone = self.downgrade_to_weak_reference();
             decodebin.connect_pad_added(move |_decodebin, pad| {
-                let app = upgrade_weak_reference!(app_clone);
+                let app = upgrade_app_weak_reference!(app_clone);
                 app.on_incoming_decodebin_stream(pad);
             });
 
@@ -321,86 +320,8 @@ impl App {
     }
 }
 
-impl Drop for AppInner {
+impl Drop for LeaderInner {
     fn drop(&mut self) {
         let _ = self.pipeline.set_state(gstreamer::State::Null);
-    }
-}
-
-pub struct WebRTC {
-    app: App,
-}
-
-impl WebRTC {
-    pub fn new(
-        room_address: &Addr<service_room::Room>,
-        room_name: &String,
-        uuid: &String,
-    ) -> Addr<WebRTC> {
-        let app = App::new(&room_address, &room_name, &uuid).unwrap();
-
-        let webrtc = WebRTC { app: app };
-        webrtc.start()
-    }
-}
-
-impl Actor for WebRTC {
-    type Context = actix::Context<Self>;
-}
-
-impl Handler<webrtc::SessionDescription> for WebRTC {
-    type Result = ();
-
-    fn handle(&mut self, sdp: webrtc::SessionDescription, _: &mut actix::Context<Self>) {
-        let request_sdp = serde_json::to_string(&sdp).unwrap();
-        info!(
-            "[GET SDP FROM SUPERVISOR] [ROOM: {}] [UUID: {}] {}",
-            self.app.room_name, self.app.uuid, request_sdp
-        );
-        let ret = gstreamer_sdp::SDPMessage::parse_buffer(sdp.sdp.as_bytes())
-            .map_err(|_| info!("Failed to parse SDP offer"))
-            .unwrap();
-        let app_clone = self.app.downgrade_to_weak_reference();
-
-        self.app.pipeline.call_async(move |_pipeline| {
-            let app = upgrade_weak_reference!(app_clone);
-
-            let answer = gstreamer_webrtc::WebRTCSessionDescription::new(
-                gstreamer_webrtc::WebRTCSDPType::Answer,
-                ret,
-            );
-            app.webrtcbin
-                .emit(
-                    "set-remote-description",
-                    &[&answer, &None::<gstreamer::Promise>],
-                )
-                .unwrap();
-        });
-    }
-}
-
-impl Handler<webrtc::ICECandidate> for WebRTC {
-    type Result = ();
-
-    fn handle(&mut self, channel: webrtc::ICECandidate, _: &mut actix::Context<Self>) {
-        self.app
-            .webrtcbin
-            .emit(
-                "add-ice-candidate",
-                &[&channel.sdp_mline_index, &channel.candidate],
-            )
-            .unwrap();
-    }
-}
-
-impl Handler<webrtc::DeleteLeader> for WebRTC {
-    type Result = ();
-
-    fn handle(&mut self, _: webrtc::DeleteLeader, context: &mut actix::Context<Self>) {
-        self.app
-            .pipeline
-            .set_state(gstreamer::State::Null)
-            .expect("Failed to set the pipeline state to null");
-        context.stop();
     }
 }
