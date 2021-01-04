@@ -3,7 +3,7 @@ use crate::{
     constants,
     models::{message_websocket, webrtc},
 };
-use actix::{Addr};
+use actix::Addr;
 use anyhow::{Context, Error};
 use gstreamer;
 use gstreamer::{

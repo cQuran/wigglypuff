@@ -1,11 +1,8 @@
 use crate::{
-    constants,
-    models,
-    models::{
-        message_websocket::{MessageSocketType, UserStatus},
-    },
-    service::{message_websocket, webrtc},
+    constants, models,
+    models::message_websocket::{MessageSocketType, UserStatus},
     service,
+    service::{message_websocket, webrtc},
 };
 
 use actix::{Actor, ActorContext, Addr, AsyncContext, Handler, Running, StreamHandler};
@@ -37,11 +34,20 @@ impl Actor for Session {
             uuid: &self.uuid,
         })
         .unwrap();
+
+        let _ = self
+            .webrtc_supervisor_address
+            .do_send(models::webrtc::DeleteLeader {
+                uuid: self.uuid.clone(),
+                room_name: self.room_name.clone(),
+            });
+
         self.room_address.do_send(models::room::Broadcast {
             uuid: self.uuid.to_owned(),
             room_name: self.room_name.to_owned(),
             message: user_disconnected_json_message,
         });
+
         Running::Stop
     }
 }
