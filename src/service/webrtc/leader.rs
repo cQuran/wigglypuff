@@ -68,7 +68,7 @@ impl Leader {
 
         let pipeline = gstreamer::parse_launch(
             "audiotestsrc is-live=true ! opusenc ! rtpopuspay pt=97 ! webrtcbin. \
-             webrtcbin name=webrtcbin ! rtpopusdepay ! queue leaky=2 ! rtpopuspay",
+             webrtcbin name=webrtcbin ! rtpopusdepay ! queue leaky=2 ! rtpopuspay pt=97 ! tee name=audio-tee",
         )
         .unwrap();
 
@@ -87,7 +87,7 @@ impl Leader {
         let uuid = uuid.clone();
         let room_address = room_address.clone();
 
-        let app = Leader(Arc::new(LeaderInner {
+        let leader = Leader(Arc::new(LeaderInner {
             pipeline,
             webrtcbin,
             room_address,
@@ -95,25 +95,29 @@ impl Leader {
             uuid,
         }));
 
-        let app_clone = app.downgrade_to_weak_reference();
-        app.webrtcbin.connect_pad_added(move |_webrtc, webrtc_pad| {
-            let app = upgrade_app_weak_reference!(app_clone);
+        let leader_clone = leader.downgrade_to_weak_reference();
+        leader
+            .webrtcbin
+            .connect_pad_added(move |_webrtc, webrtc_pad| {
+                let leader = upgrade_app_weak_reference!(leader_clone);
 
-            info!("PAD ADDEDDD WEBRTC {}", webrtc_pad.get_name());
-            app.on_incoming_stream(webrtc_pad);
-        });
+                info!("PAD ADDEDDD WEBRTC {}", webrtc_pad.get_name());
+                leader.on_incoming_stream(webrtc_pad);
+            });
 
-        let app_clone = app.downgrade_to_weak_reference();
-        app.webrtcbin
+        let leader_clone = leader.downgrade_to_weak_reference();
+        leader
+            .webrtcbin
             .connect("on-negotiation-needed", false, move |_values| {
-                let app = upgrade_app_weak_reference!(app_clone, None);
-                app.on_negotiation_needed();
+                let leader = upgrade_app_weak_reference!(leader_clone, None);
+                leader.on_negotiation_needed();
                 None
             })
             .unwrap();
 
-        let app_clone = app.downgrade_to_weak_reference();
-        app.webrtcbin
+        let leader_clone = leader.downgrade_to_weak_reference();
+        leader
+            .webrtcbin
             .connect("on-ice-candidate", false, move |values| {
                 let _webrtc = values[0]
                     .get::<gstreamer::Element>()
@@ -124,13 +128,14 @@ impl Leader {
                     .expect("Invalid argument")
                     .unwrap();
 
-                let app = upgrade_app_weak_reference!(app_clone, None);
-                app.on_ice_candidate(&candidate, &sdp_mline_index);
+                let leader = upgrade_app_weak_reference!(leader_clone, None);
+                leader.on_ice_candidate(&candidate, &sdp_mline_index);
                 None
             })
             .unwrap();
 
-        app.webrtcbin
+        leader
+            .webrtcbin
             .connect_notify(Some("connection-state"), |webrtcbin, _spec| {
                 info!(
                     "[CONNECTION STATE: {:#?}]",
@@ -142,7 +147,8 @@ impl Leader {
                 );
             });
 
-        app.webrtcbin
+        leader
+            .webrtcbin
             .connect_notify(Some("ice-connection-state"), |webrtcbin, _spec| {
                 info!(
                     "[ICE CONNECTION STATE: {:#?}]",
@@ -154,7 +160,8 @@ impl Leader {
                 );
             });
 
-        app.webrtcbin
+        leader
+            .webrtcbin
             .connect_notify(Some("ice-gathering-state"), |webrtcbin, _spec| {
                 info!(
                     "[GATHER CONNECTION STATE: {:#?}]",
@@ -166,7 +173,8 @@ impl Leader {
                 );
             });
 
-        app.webrtcbin
+        leader
+            .webrtcbin
             .connect_notify(Some("signaling-state"), |webrtcbin, _spec| {
                 info!(
                     "[SIGNALLING STATE: {:#?}]",
@@ -178,19 +186,19 @@ impl Leader {
                 );
             });
 
-        app.pipeline.call_async(|pipeline| {
+        leader.pipeline.call_async(|pipeline| {
             if pipeline.set_state(gstreamer::State::Playing).is_err() {
                 info!("Failed to set pipeline to Playing");
             }
         });
 
-        app.pipeline.call_async(|pipeline| {
+        leader.pipeline.call_async(|pipeline| {
             pipeline
                 .set_state(gstreamer::State::Playing)
                 .expect("Couldn't set pipeline to Playing");
         });
 
-        Ok(app)
+        Ok(leader)
     }
 
     pub fn downgrade_to_weak_reference(&self) -> LeaderWeak {
@@ -202,10 +210,10 @@ impl Leader {
             "[WEBRTC] [ROOM: {}] [UUID: {}] [STARTING NEGOTIATION]",
             self.room_name, self.uuid
         );
-        let app_clone = self.downgrade_to_weak_reference();
+        let leader_clone = self.downgrade_to_weak_reference();
         let promise = gstreamer::Promise::with_change_func(move |reply| {
-            let app = upgrade_app_weak_reference!(app_clone);
-            app.on_offer_created(reply);
+            let leader = upgrade_app_weak_reference!(leader_clone);
+            leader.on_offer_created(reply);
         });
 
         self.webrtcbin
@@ -228,16 +236,16 @@ impl Leader {
         if webrtc_source_pad.get_direction() == gstreamer::PadDirection::Src {
             let decodebin =
                 gstreamer::ElementFactory::make("decodebin", Some("decodebin_from_audio")).unwrap();
-            let app_clone = self.downgrade_to_weak_reference();
+            let leader_clone = self.downgrade_to_weak_reference();
             decodebin.connect_pad_added(move |_decodebin, source_pad| {
-                let app = upgrade_app_weak_reference!(app_clone);
+                let leader = upgrade_app_weak_reference!(leader_clone);
                 info!("PAD ADDEDDD DECODEBIN {}", source_pad.get_name());
-                app.on_incoming_decodebin_stream(source_pad);
+                leader.on_incoming_decodebin_stream(source_pad);
             });
 
             self.pipeline.add(&decodebin).unwrap();
             decodebin.sync_state_with_parent().unwrap();
-            
+
             // TODO
             // webrtc_source_pad.link(&decodebin_sink_pad).unwrap();
         }
