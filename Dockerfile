@@ -58,7 +58,16 @@ RUN wget https://gstreamer.freedesktop.org/src/gst-rtsp-server/gst-rtsp-server-1
 
 RUN ldconfig -v
 
+RUN apt update && apt install libnss3-tools -y \
+    && wget https://github.com/FiloSottile/mkcert/releases/download/v1.4.3/mkcert-v1.4.3-linux-amd64 \
+    && mv mkcert-v1.4.3-linux-amd64 mkcert \
+    && chmod +x mkcert \
+    && cp mkcert /usr/local/bin/ \
+    && mkcert -install
+
 WORKDIR /app
+
+RUN mkcert 127.0.0.1 localhost
 
 ADD Cargo.toml .
 

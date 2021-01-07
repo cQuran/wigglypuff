@@ -11,6 +11,7 @@ async fn main() -> std::io::Result<()> {
     let url = config::input_arguments::config_arguments();
     let room = service::room::Room::new();
     let webrtc_supervisor = service::webrtc::supervisor::Supervisor::new();
+    let config_https = config::https::config_https();
 
     config::webrtc::config_gstreamer();
 
@@ -21,7 +22,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(actix_web::middleware::Logger::default())
             .configure(config::app::config_services)
     })
-    .bind(&url)?
+    .bind_openssl(&url, config_https)?
     .run()
     .await
 }
