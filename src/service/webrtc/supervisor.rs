@@ -34,6 +34,7 @@ impl Handler<supervisor::RegisterUser> for Supervisor {
             self.channels.insert(room_name.clone(), channel);
         } else {
             if let Some(channel) = self.channels.get(&user.room_name) {
+                info!("CONTAINTS");
                 channel.do_send(user);
             }
         }

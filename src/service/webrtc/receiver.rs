@@ -70,6 +70,7 @@ impl Receiver {
             pipeline,
         }));
 
+        info!("PLAYYY RECEIVER");
         let receiver_clone = receiver.downgrade_to_weak_reference();
         receiver
             .webrtcbin
@@ -178,7 +179,6 @@ impl Receiver {
                     signalling.unwrap()
                 );
             });
-
         Ok(receiver)
     }
 
@@ -240,15 +240,23 @@ impl Receiver {
     fn on_incoming_stream(&self, webrtc_source_pad: &gstreamer::Pad) {
         if webrtc_source_pad.get_direction() == gstreamer::PadDirection::Src {
             let decodebin =
-                gstreamer::ElementFactory::make("decodebin", Some("decodebin_from_audio")).unwrap();
+                gstreamer::ElementFactory::make("decodebin", Some(&format!(
+                    "{}_decodebin_from_audio", self.uuid.clone(), 
+                ))).unwrap();
             let receiver_clone = self.downgrade_to_weak_reference();
+            let room = self.room_name.clone();
+            let uuid = self.uuid.clone();
             decodebin.connect_pad_added(move |_decodebin, source_pad| {
                 let receiver = upgrade_app_weak_reference!(receiver_clone);
-                info!("PAD ADDEDDD DECODEBIN {}", source_pad.get_name());
-                // receiver.on_incoming_decodebin_stream(source_pad);
+                info!(
+                    "[ROOM: {}] [UUID: {}] [PAD ADDED DECODEBIN] {}",
+                    room,
+                    uuid,
+                    source_pad.get_name()
+                );
+                receiver.on_incoming_decodebin_stream(source_pad);
             });
 
-            // TODO
             let pipeline_gstreamer = self.pipeline.lock().unwrap();
             pipeline_gstreamer.pipeline.add(&decodebin).unwrap();
             decodebin.sync_state_with_parent().unwrap();
@@ -264,20 +272,20 @@ impl Receiver {
         let queue_sink = if name.starts_with("video/") {
             info!("[WARN] VIDEO SINK");
             gstreamer::parse_bin_from_description(
-                "queue ! videoconvert ! videoscale ! autovideosink",
+                "multiqueue ! videoconvert ! videoscale ! autovideosink",
                 true,
             )
             .unwrap()
         } else if name.starts_with("audio/") {
             gstreamer::parse_bin_from_description(
-                "queue ! audioconvert ! audioresample ! autoaudiosink",
+                "multiqueue ! audioconvert ! audioresample ! autoaudiosink",
                 true,
             )
             .unwrap()
         } else {
             info!("[WARN] VIDEO SINK");
             gstreamer::parse_bin_from_description(
-                "queue ! videoconvert ! videoscale ! autovideosink",
+                "multiqueue ! videoconvert ! videoscale ! autovideosink",
                 true,
             )
             .unwrap()

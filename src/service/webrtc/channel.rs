@@ -17,13 +17,7 @@ pub struct Channel {
 
 impl Channel {
     pub fn new(room_name: &String) -> Addr<Channel> {
-        let audiotestsrc = gstreamer::parse_launch(
-            "audiotestsrc is-live=true ! opusenc ! rtpopuspay name=rtpaudiotest pt=97",
-        )
-        .unwrap();
-
         let pipeline = gstreamer::Pipeline::new(Some(room_name));
-        pipeline.add_many(&[&audiotestsrc]).unwrap();
 
         let channel = Channel {
             receivers: BTreeMap::new(),
@@ -35,20 +29,35 @@ impl Channel {
         channel.start()
     }
 
-    fn create_webrtc(&self, room_name: &String) -> gstreamer::Element {
+    fn create_webrtc_pipeline(&self, uuid: &String, room_name: &String) -> gstreamer::Element {
+        info!("MAU JALAN NEEE");
         let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
-        let webrtcbin = gstreamer::ElementFactory::make("webrtcbin", Some("webrtcbin"))
+
+        info!("JALAN KOKKKK");
+        let previous = gstreamer::parse_launch(&format!(
+            "audiotestsrc is-live=true ! opusenc ! rtpopuspay name={}_{} pt=97",
+            uuid, "previous"
+        ))
+        .unwrap();
+
+        let webrtcbin = gstreamer::ElementFactory::make("webrtcbin", Some(uuid))
             .expect("Could not instanciate webrtcbin");
 
-        pipeline_gstreamer.pipeline.add_many(&[&webrtcbin]).unwrap();
+        let next = gstreamer::parse_launch(&format!(
+            "rtpopusdepay ! rtpopuspay name={}_{} pt=97",
+            uuid, "next"
+        )).unwrap();
 
-        let rtpaudiotest = pipeline_gstreamer
+        pipeline_gstreamer
             .pipeline
-            .get_by_name("rtpaudiotest")
-            .expect("can't find webrtcbin");
-        webrtcbin.sync_state_with_parent().unwrap();
+            .add_many(&[&previous, &webrtcbin, &next])
+            .unwrap();
 
-        rtpaudiotest
+        let previous = pipeline_gstreamer
+            .pipeline
+            .get_by_name(&format!("{}_{}", uuid, "previous"))
+            .expect("can't find webrtcbin");
+        previous
             .link(&webrtcbin)
             .expect("element could not be linked");
         webrtcbin.set_property_from_str("stun-server", constants::STUN_SERVER);
@@ -80,7 +89,8 @@ impl Handler<supervisor::RegisterUser> for Channel {
     type Result = ();
 
     fn handle(&mut self, user: supervisor::RegisterUser, _: &mut actix::Context<Self>) {
-        let webrtcbin = self.create_webrtc(&user.room_name);
+        let webrtcbin = self.create_webrtc_pipeline(&user.uuid, &user.room_name);
+        info!("JADIIIIIIIIIII");
         let receiver = receiver::Receiver::new(
             user.room_address,
             &user.room_name,
