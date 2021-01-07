@@ -20,11 +20,11 @@ impl Actor for Session {
     type Context = ws::WebsocketContext<Self>;
 
     fn started(&mut self, context: &mut Self::Context) {
-        let room_address = context.address();
+        let session_address = context.address();
         self.room_address.do_send(models::room::Connect {
             room_name: self.room_name.to_owned(),
             uuid: self.uuid.to_owned(),
-            room_address: room_address.recipient(),
+            session_address: session_address.recipient(),
         });
     }
 
@@ -37,7 +37,7 @@ impl Actor for Session {
 
         let _ = self
             .webrtc_supervisor_address
-            .do_send(models::webrtc::DeleteLeader {
+            .do_send(models::supervisor::DeleteUser {
                 uuid: self.uuid.clone(),
                 room_name: self.room_name.clone(),
             });

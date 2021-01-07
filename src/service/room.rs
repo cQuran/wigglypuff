@@ -29,7 +29,7 @@ impl Handler<room::Connect> for Room {
 
     fn handle(&mut self, connect: room::Connect, _: &mut Context<Self>) {
         self.sessions
-            .insert(connect.uuid.clone(), connect.room_address);
+            .insert(connect.uuid.clone(), connect.session_address);
 
         self.rooms
             .entry(connect.room_name.clone())
@@ -164,8 +164,8 @@ impl Handler<webrtc::WigglypuffWebRTC> for Room {
 impl Room {
     fn broadcast(&self, from_uuid: &str, room_name: &str, message: &str) {
         info!(
-            "[BROADCAST] [ROOM: {}] [FROM UUID: {}] [MESSAGE: {}]",
-            room_name, from_uuid, message
+            "[ROOM: {}] [FROM UUID: {}] [BROADCAST]",
+            room_name, from_uuid
         );
         if let Some(sessions) = self.rooms.get(room_name) {
             for session in sessions {
@@ -179,7 +179,7 @@ impl Room {
     }
     fn send_user(&self, to_uuid: &str, room_name: &str, message: &str) {
         info!(
-            "[SEND USER] [ROOM: {}] [TO UUID: {}] [MESSAGE: {}]",
+            "[ROOM: {}] [TO UUID: {}] [SEND USER] [MESSAGE: {}]",
             room_name, to_uuid, message
         );
         if let Some(sessions) = self.rooms.get(room_name) {

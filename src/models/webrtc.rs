@@ -1,54 +1,31 @@
 use crate::models::message_websocket;
-use crate::service::room;
-use actix::Addr;
 use actix_derive::Message;
 use serde::{Deserialize, Serialize};
 
-#[derive(Message, Serialize)]
-#[rtype(result = "()")]
-pub struct SessionDescription {
-    pub room_name: String,
-    pub uuid: String,
-    #[serde(rename = "type")]
-    pub types: String,
-    pub sdp: String,
-}
-
-#[derive(Message, Deserialize)]
-#[rtype(result = "()")]
-pub struct CheckRunning {}
-
-#[derive(Message, Deserialize)]
+#[derive(Message, Deserialize, Serialize)]
 #[rtype(result = "()")]
 pub struct ICECandidate {
     pub room_name: String,
-    pub uuid: String,
+    pub from_uuid: String,
     pub candidate: String,
     #[serde(rename = "sdpMLineIndex")]
     pub sdp_mline_index: u32,
 }
 
+#[derive(Message, Clone)]
+#[rtype(result = "()")]
+pub struct GstreamerPipeline {
+    pub pipeline: gstreamer::Pipeline
+}
+
 #[derive(Message, Serialize)]
 #[rtype(result = "()")]
-pub struct SDPAnswer {
+pub struct SessionDescription {
+    pub room_name: String,
+    pub from_uuid: String,
     #[serde(rename = "type")]
     pub types: String,
     pub sdp: String,
-}
-
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct RegisterUser {
-    pub uuid: String,
-    pub room_name: String,
-    pub room_address: Addr<room::Room>,
-}
-
-#[derive(Message, Clone)]
-#[rtype(result = "()")]
-pub struct DeleteLeader {
-    pub uuid: String,
-    pub room_name: String,
 }
 
 #[derive(Message, Serialize, Deserialize)]

@@ -25,7 +25,7 @@ pub struct Message(pub String);
 pub struct Connect {
     pub room_name: String,
     pub uuid: String,
-    pub room_address: Recipient<Message>,
+    pub session_address: Recipient<Message>,
 }
 
 #[derive(MessageResponse, Serialize)]

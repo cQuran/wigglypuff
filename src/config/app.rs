@@ -43,7 +43,7 @@ pub fn config_services(config: &mut web::ServiceConfig) {
                             ),
                         )
                         .service(
-                            web::scope("/join/{room_name}/{id}").service(
+                            web::scope("/join/{room_name}/{uuid}").service(
                                 web::resource("").route(web::get().to(room_controller::join)),
                             ),
                         )

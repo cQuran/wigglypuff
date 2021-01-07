@@ -1,7 +1,7 @@
 use crate::constants;
 use crate::models::room as models_room;
 use crate::service::room as service_room;
-use crate::models::webrtc as models_webrtc;
+use crate::models::supervisor as supervisor;
 use crate::service::{session, webrtc};
 use crate::models::{
     response,
@@ -53,8 +53,7 @@ pub async fn join(
     } ).await.unwrap();
 
     if &master_uuid != "NAN" {
-            
-        supervisor_webrtc_address.get_ref().send(models_webrtc::RegisterUser {
+        supervisor_webrtc_address.get_ref().send(supervisor::RegisterUser {
             room_address: room_address.get_ref().clone(),
             room_name: parameter.0.0.clone(),
             uuid: parameter.0.1.to_owned()
@@ -110,7 +109,7 @@ pub async fn kick_user(
 
     let _ = supervisor_webrtc_address
         .get_ref()
-        .do_send(models_webrtc::DeleteLeader {
+        .do_send(supervisor::DeleteUser {
             uuid: request.uuid.to_owned(),
             room_name: request.room_name.to_owned(),
         });

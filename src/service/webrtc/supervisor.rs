@@ -1,11 +1,12 @@
+use crate::models::supervisor;
 use crate::models::webrtc;
-use crate::service::webrtc::webrtc as service_webrtc;
+use crate::service::webrtc::channel;
 use actix::{Actor, Addr, Context, Handler};
 use log::info;
 use std::collections::BTreeMap;
 
 pub struct Supervisor {
-    leader: BTreeMap<String, Addr<service_webrtc::WebRTC>>,
+    channels: BTreeMap<String, Addr<channel::Channel>>,
 }
 
 impl Actor for Supervisor {
@@ -15,28 +16,26 @@ impl Actor for Supervisor {
 impl Supervisor {
     pub fn new() -> Addr<Supervisor> {
         let supervisor = Supervisor {
-            leader: BTreeMap::new(),
+            channels: BTreeMap::new(),
         };
         supervisor.start()
     }
 }
 
-impl Handler<webrtc::RegisterUser> for Supervisor {
+impl Handler<supervisor::RegisterUser> for Supervisor {
     type Result = ();
 
-    fn handle(&mut self, room_leader: webrtc::RegisterUser, _: &mut Context<Self>) {
-        let room_name = room_leader.room_name.clone();
-        if !self.leader.contains_key(&room_name) {
-            let webrtc_leader_address = service_webrtc::WebRTC::new(
-                &room_leader.room_address.clone(),
-                &room_leader.room_name.clone(),
-                &room_leader.uuid.clone(),
-            );
+    fn handle(&mut self, user: supervisor::RegisterUser, _: &mut Context<Self>) {
+        let room_name = user.room_name.clone();
+        if !self.channels.contains_key(&room_name) {
+            let channel = channel::Channel::new(&room_name.clone());
 
-            self.leader
-                .insert(room_leader.room_name.clone(), webrtc_leader_address);
+            channel.do_send(user);
+            self.channels.insert(room_name.clone(), channel);
         } else {
-            info!("ADAA");
+            if let Some(channel) = self.channels.get(&user.room_name) {
+                channel.do_send(user);
+            }
         }
     }
 }
@@ -44,13 +43,17 @@ impl Handler<webrtc::RegisterUser> for Supervisor {
 impl Handler<webrtc::SessionDescription> for Supervisor {
     type Result = ();
 
-    fn handle(&mut self, session_description: webrtc::SessionDescription, _: &mut Context<Self>) {
+    fn handle(
+        &mut self,
+        session_description_request: webrtc::SessionDescription,
+        _: &mut Context<Self>,
+    ) {
         info!(
-            "[GET SDP MESSAGE] [ROOM: {}] [UUID: {}], SEND TO LEADER",
-            session_description.room_name, session_description.uuid
+            "[ROOM: {}] [UUID: {}] [GET SDP MESSAGE] [SEND TO CHANNEL]",
+            session_description_request.room_name, session_description_request.from_uuid
         );
-        if let Some(leader_address) = self.leader.get(&session_description.room_name) {
-            leader_address.do_send(session_description);
+        if let Some(channel) = self.channels.get(&session_description_request.room_name) {
+            channel.do_send(session_description_request);
         }
     }
 }
@@ -58,28 +61,31 @@ impl Handler<webrtc::SessionDescription> for Supervisor {
 impl Handler<webrtc::ICECandidate> for Supervisor {
     type Result = ();
 
-    fn handle(&mut self, session_description: webrtc::ICECandidate, _: &mut Context<Self>) {
+    fn handle(&mut self, ice_candidate_request: webrtc::ICECandidate, _: &mut Context<Self>) {
         info!(
-            "[GET ICE MESSAGE] [ROOM: {}] [UUID: {}], SEND TO LEADER",
-            session_description.room_name, session_description.uuid
+            "[ROOM: {}] [UUID: {}] [GET ICE MESSAGE] [SEND TO CHANNEL]",
+            ice_candidate_request.room_name, ice_candidate_request.from_uuid
         );
-        if let Some(leader_address) = self.leader.get(&session_description.room_name) {
-            leader_address.do_send(session_description);
+        if let Some(channel) = self.channels.get(&ice_candidate_request.room_name) {
+            channel.do_send(ice_candidate_request);
         }
     }
 }
 
-impl Handler<webrtc::DeleteLeader> for Supervisor {
+impl Handler<supervisor::DeleteUser> for Supervisor {
     type Result = ();
 
-    fn handle(&mut self, delete_reader: webrtc::DeleteLeader, _: &mut Context<Self>) {
+    fn handle(&mut self, user: supervisor::DeleteUser, _: &mut Context<Self>) {
         info!(
-            "[DELETE LEADER] [ROOM: {}] [UUID: {}]",
-            delete_reader.room_name, delete_reader.uuid
+            "[ROOM: {}] [UUID: {}] [DELETE USER (RECEIVER)]",
+            user.room_name, user.uuid
         );
-        if let Some(leader_address) = self.leader.get(&delete_reader.room_name) {
-            leader_address.do_send(delete_reader.clone());
-        }
-        self.leader.remove(&delete_reader.room_name);
+        // self.pipeline
+        //     .set_state(gstreamer::State::Null)
+        //     .expect("Failed to set the pipeline state to null");
+
+        // if let Some(channel) = self.users.get(&user.room_name) {
+        //     channel.do_send(webrtc::Kill {});
+        // }
     }
 }
