@@ -34,13 +34,11 @@ impl Channel {
     fn create_sample_peer(
         &self,
         pipeline_gstreamer: &webrtc::GstreamerPipeline,
-        uuid: &String,
-        wave: &str,
+        uuid: &String
     ) {
         let audiotestsrc = gstreamer::parse_launch(&format!(
-            "audiotestsrc name={uuid}_audiotestsrc_{wave} wave={wave} is-live=true",
-            uuid = uuid,
-            wave = wave
+            "audiotestsrc name={uuid}_audiotestsrc wave=silence is-live=true",
+            uuid = uuid
         ))
         .unwrap();
         pipeline_gstreamer
@@ -84,8 +82,7 @@ impl Channel {
             .unwrap();
         rtpopuspay.set_property_from_str("pt", "97");
 
-        self.create_sample_peer(&pipeline_gstreamer, &uuid, "sine");
-        self.create_sample_peer(&pipeline_gstreamer, &uuid, "pink-noise");
+        self.create_sample_peer(&pipeline_gstreamer, &uuid);
         opusenc.link(&rtpopuspay).unwrap();
         audiomixer.link(&opusenc).unwrap();
         rtpopuspay.link(&webrtcbin).unwrap();
@@ -168,24 +165,22 @@ impl Handler<supervisor::DeleteUser> for Channel {
             "[ROOM: {}] [UUID: {}] [GET user FROM CHANNEL TEST]",
             user.room_name, user.uuid
         );
-        let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
+        // let audioresample = pipeline_gstreamer
+        //     .pipeline
+        //     .get_by_name(&format!("{}_audioresample", user.uuid))
+        //     .expect("can't find webrtcbin");
 
-        let audioresample = pipeline_gstreamer
-            .pipeline
-            .get_by_name(&format!("{}_audioresample", user.uuid))
-            .expect("can't find webrtcbin");
+        // let autoaudiosink_from_uuid = pipeline_gstreamer
+        //     .pipeline
+        //     .get_by_name(&format!("{}_autoaudiosink", user.uuid))
+        //     .expect("can't find webrtcbin");
 
-        let autoaudiosink_from_uuid = pipeline_gstreamer
-            .pipeline
-            .get_by_name(&format!("{}_autoaudiosink", user.uuid))
-            .expect("can't find webrtcbin");
+        // let autoaudiosink_to_uuid = pipeline_gstreamer
+        //     .pipeline
+        //     .get_by_name(&format!("{}_autoaudiosink", user.to_uuid))
+        //     .expect("can't find webrtcbin");
 
-        let autoaudiosink_to_uuid = pipeline_gstreamer
-            .pipeline
-            .get_by_name(&format!("{}_autoaudiosink", user.to_uuid))
-            .expect("can't find webrtcbin");
-
-        audioresample.unlink(&autoaudiosink_from_uuid);
-        audioresample.link(&autoaudiosink_to_uuid).unwrap();
+        // audioresample.unlink(&autoaudiosink_from_uuid);
+        // audioresample.link(&autoaudiosink_to_uuid).unwrap();
     }
 }

@@ -1,9 +1,12 @@
 use crate::models::{message_websocket, webrtc};
 use crate::service::room as service_room;
 use actix::Addr;
-use anyhow::{Context, Error};
+use anyhow::Error;
 use gstreamer;
-use gstreamer::{prelude::ObjectExt, ElementExt, GstBinExt, GstObjectExt, PadExt, PadExtManual};
+use gstreamer::{
+    prelude::ObjectExt, ElementExt, ElementExtManual, GstBinExt, GstBinExtManual, PadExt,
+    PadExtManual,
+};
 use log::info;
 use std::sync::{Arc, Mutex, Weak};
 
@@ -127,6 +130,8 @@ impl Receiver {
 
         let room_name_copy = requst_room_name.to_string();
         let uuid_copy = request_uuid.to_string();
+
+        let receiver_clone = receiver.downgrade_to_weak_reference();
         receiver
             .webrtcbin
             .connect_notify(Some("ice-connection-state"), move |webrtcbin, _spec| {
@@ -241,73 +246,51 @@ impl Receiver {
             info!("LINKED");
             let pipeline_gstreamer = self.pipeline.lock().unwrap();
 
-            let decodebin = gstreamer::ElementFactory::make(
-                "decodebin",
-                Some(&format!("{}_decodebin", self.uuid.clone(),)),
+            let rtpopusdepay = gstreamer::ElementFactory::make(
+                "rtpopusdepay",
+                Some(&format!("{}_rtpopusdepay", self.uuid.clone(),)),
             )
             .unwrap();
 
-            let receiver_clone = self.downgrade_to_weak_reference();
-            let room = self.room_name.clone();
-            let uuid = self.uuid.clone();
-            decodebin.connect_pad_added(move |_decodebin, source_pad| {
-                let receiver = upgrade_app_weak_reference!(receiver_clone);
-                info!(
-                    "[ROOM: {}] [UUID: {}] [PAD ADDED DECODEBIN] {}",
-                    room,
-                    uuid,
-                    source_pad.get_name()
-                );
-                receiver.on_incoming_decodebin_stream(source_pad);
-            });
+            let opusdec = gstreamer::ElementFactory::make(
+                "opusdec",
+                Some(&format!("{}_opusdec", self.uuid.clone(),)),
+            )
+            .unwrap();
 
-            pipeline_gstreamer.pipeline.add(&decodebin).unwrap();
-            decodebin.sync_state_with_parent().unwrap();
-            let sinkpad = decodebin.get_static_pad("sink").unwrap();
-            webrtc_source_pad.link(&sinkpad).unwrap();
+            let audioconvert = gstreamer::ElementFactory::make(
+                "audioconvert",
+                Some(&format!("{}_audioconvert_rtpopusdepay", self.uuid.clone())),
+            )
+            .unwrap();
+
+            pipeline_gstreamer
+                .pipeline
+                .add_many(&[&rtpopusdepay, &opusdec, &audioconvert])
+                .unwrap();
+            rtpopusdepay.sync_state_with_parent().unwrap();
+            opusdec.sync_state_with_parent().unwrap();
+            audioconvert.sync_state_with_parent().unwrap();
+
+            let rtpopusdepay_sink = rtpopusdepay.get_static_pad("sink").unwrap();
+            webrtc_source_pad.link(&rtpopusdepay_sink).unwrap();
+
+            let audiomixer = pipeline_gstreamer
+                .pipeline
+                .get_by_name(&format!("{}_audiomixer", self.uuid.clone()))
+                .expect("can't find webrtcbin");
+
+            let rtpopusdepay_src = rtpopusdepay.get_static_pad("src").unwrap();
+            let opusdec_sink = opusdec.get_static_pad("sink").unwrap();
+            let opusdec_src = opusdec.get_static_pad("src").unwrap();
+            rtpopusdepay_src.link(&opusdec_sink).unwrap();
+            let audioconvert_sink = audioconvert.get_static_pad("sink").unwrap();
+            opusdec_src.link(&audioconvert_sink).unwrap();
+            let audioconvert_src = audioconvert.get_static_pad("src").unwrap();
+
+            let audiomixer_pad = audiomixer.get_request_pad("sink_%u").unwrap();
+            audioconvert_src.link(&audiomixer_pad).unwrap();
         }
-    }
-
-    fn on_incoming_decodebin_stream(&self, decodebin_source_pad: &gstreamer::Pad) {
-        let caps = decodebin_source_pad.get_current_caps().unwrap();
-        let name = caps.get_structure(0).unwrap().get_name();
-
-        let next = if name.starts_with("audio/") {
-            gstreamer::parse_bin_from_description(
-                &format!(
-                    "queue ! audioconvert ! audioresample name={}_audioresample ! autoaudiosink name={}_autoaudiosink",
-                    self.uuid, self.uuid
-                ),
-                true,
-            )
-            .unwrap()
-        } else {
-            info!("[WARN] VIDEO SINK");
-            gstreamer::parse_bin_from_description(
-                "queue ! videoconvert ! videoscale ! autovideosink",
-                true,
-            )
-            .unwrap()
-        };
-
-        let pipeline_gstreamer = self.pipeline.lock().unwrap();
-        pipeline_gstreamer.pipeline.add(&next).unwrap();
-
-        next.sync_state_with_parent()
-            .with_context(|| format!("can't start sink for stream {:?}", caps))
-            .unwrap();
-
-        let next_pad = next.get_static_pad("sink").unwrap();
-
-        decodebin_source_pad
-            .link(&next_pad)
-            .with_context(|| format!("can't link sink for stream {:?}", caps))
-            .unwrap();
-
-        info!(
-            "[ROOM: {}] [UUID: {}] [SINK] [AUDIO SUCCESS]",
-            self.room_name, self.uuid
-        );
     }
 
     fn on_offer_created(
