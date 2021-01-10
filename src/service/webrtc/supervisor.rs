@@ -81,6 +81,9 @@ impl Handler<supervisor::DeleteUser> for Supervisor {
             "[ROOM: {}] [UUID: {}] [DELETE USER (RECEIVER)]",
             user.room_name, user.uuid
         );
+        if let Some(channel) = self.channels.get(&user.room_name) {
+            channel.do_send(user);
+        }
         // self.pipeline
         //     .set_state(gstreamer::State::Null)
         //     .expect("Failed to set the pipeline state to null");
