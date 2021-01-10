@@ -1,4 +1,4 @@
-FROM rust:1.47-slim-buster
+FROM rust:1.49-slim-buster
 
 RUN apt update \
     && apt install -y --no-install-recommends \
