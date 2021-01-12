@@ -1,4 +1,4 @@
-FROM cquran/webrtc-base:0.1.0 as builder
+FROM cquran/webrtc-base:0.1.0-alpine as builder
 
 ADD Cargo.toml .
 
