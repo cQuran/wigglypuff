@@ -3,11 +3,9 @@ use crate::service::room as service_room;
 use actix::Addr;
 use anyhow::Error;
 use gstreamer;
-use gstreamer::{
-    prelude::ObjectExt, ElementExt, ElementExtManual, GstBinExt, GstBinExtManual, PadExt,
-    PadExtManual,
-};
+use gstreamer::{prelude::ObjectExt, ElementExt, GstBinExt, GstBinExtManual, PadExt, PadExtManual};
 use log::info;
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, Weak};
 
 macro_rules! upgrade_app_weak_reference {
@@ -28,6 +26,7 @@ pub struct ReceiverInner {
     pub room_name: String,
     pub uuid: String,
     pub pipeline: Arc<Mutex<webrtc::GstreamerPipeline>>,
+    pub peer_audiomixer: Arc<Mutex<BTreeMap<String, (gstreamer::Pad, gstreamer::Element)>>>,
 }
 
 #[derive(Clone)]
@@ -57,6 +56,7 @@ impl Receiver {
         request_uuid: &String,
         pipeline: Arc<Mutex<webrtc::GstreamerPipeline>>,
         webrtcbin: gstreamer::Element,
+        peer_audiomixer: Arc<Mutex<BTreeMap<String, (gstreamer::Pad, gstreamer::Element)>>>,
     ) -> Result<Self, Error> {
         info!(
             "[ROOM: {}] [UUID: {}] Creating WebRTC Receiver Instance",
@@ -71,6 +71,7 @@ impl Receiver {
             room_name,
             uuid,
             pipeline,
+            peer_audiomixer,
         }));
 
         let receiver_clone = receiver.downgrade_to_weak_reference();
@@ -131,7 +132,6 @@ impl Receiver {
         let room_name_copy = requst_room_name.to_string();
         let uuid_copy = request_uuid.to_string();
 
-        let receiver_clone = receiver.downgrade_to_weak_reference();
         receiver
             .webrtcbin
             .connect_notify(Some("ice-connection-state"), move |webrtcbin, _spec| {
@@ -248,36 +248,41 @@ impl Receiver {
 
             let rtpopusdepay = gstreamer::ElementFactory::make(
                 "rtpopusdepay",
-                Some(&format!("{}_rtpopusdepay", self.uuid.clone(),)),
+                Some(&format!("{}_rtpopusdepay", self.uuid)),
             )
             .unwrap();
 
-            let opusdec = gstreamer::ElementFactory::make(
-                "opusdec",
-                Some(&format!("{}_opusdec", self.uuid.clone(),)),
-            )
-            .unwrap();
+            let opusdec =
+                gstreamer::ElementFactory::make("opusdec", Some(&format!("{}_opusdec", self.uuid)))
+                    .unwrap();
 
             let audioconvert = gstreamer::ElementFactory::make(
                 "audioconvert",
-                Some(&format!("{}_audioconvert_rtpopusdepay", self.uuid.clone())),
+                Some(&format!("{}_audioconvert_rtpopusdepay", self.uuid)),
+            )
+            .unwrap();
+
+            let audioresample = gstreamer::ElementFactory::make(
+                "audioresample",
+                Some(&format!("{}_audioresample_rtpopusdepay", self.uuid)),
             )
             .unwrap();
 
             pipeline_gstreamer
                 .pipeline
-                .add_many(&[&rtpopusdepay, &opusdec, &audioconvert])
+                .add_many(&[&rtpopusdepay, &opusdec, &audioconvert, &audioresample])
                 .unwrap();
             rtpopusdepay.sync_state_with_parent().unwrap();
             opusdec.sync_state_with_parent().unwrap();
             audioconvert.sync_state_with_parent().unwrap();
+            audioresample.sync_state_with_parent().unwrap();
 
             let rtpopusdepay_sink = rtpopusdepay.get_static_pad("sink").unwrap();
             webrtc_source_pad.link(&rtpopusdepay_sink).unwrap();
 
             let audiomixer = pipeline_gstreamer
                 .pipeline
-                .get_by_name(&format!("{}_audiomixer", self.uuid.clone()))
+                .get_by_name(&format!("{}_audiomixer", self.uuid))
                 .expect("can't find webrtcbin");
 
             let rtpopusdepay_src = rtpopusdepay.get_static_pad("src").unwrap();
@@ -287,9 +292,66 @@ impl Receiver {
             let audioconvert_sink = audioconvert.get_static_pad("sink").unwrap();
             opusdec_src.link(&audioconvert_sink).unwrap();
             let audioconvert_src = audioconvert.get_static_pad("src").unwrap();
+            let audioresample_sink = audioresample.get_static_pad("sink").unwrap();
+            let audioresample_src = audioresample.get_static_pad("src").unwrap();
+            audioconvert_src.link(&audioresample_sink).unwrap();
+            info!("INI LHO TEEE AWAL {}", self.uuid);
 
-            let audiomixer_pad = audiomixer.get_request_pad("sink_%u").unwrap();
-            audioconvert_src.link(&audiomixer_pad).unwrap();
+            let tee = gstreamer::ElementFactory::make("tee", Some(&format!("{}_tee", self.uuid)))
+                .unwrap();
+
+            pipeline_gstreamer.pipeline.add_many(&[&tee]).unwrap();
+            tee.sync_state_with_parent().unwrap();
+            let tee_sink = tee.get_static_pad("sink").unwrap();
+            audioresample_src.link(&tee_sink).unwrap();
+
+            let tee_src = tee.get_request_pad("src_%u").unwrap();
+            let audiomixer_sink = audiomixer.get_request_pad("sink_%u").unwrap();
+            tee_src.link(&audiomixer_sink).unwrap();
+
+            let mut peer = self.peer_audiomixer.lock().unwrap();
+
+            for (key, (pad, audiomixer_target)) in peer.iter() {
+                let tee_src = tee.get_request_pad("src_%u").unwrap();
+                let tee_block = tee_src
+                    .add_probe(gstreamer::PadProbeType::BLOCK_DOWNSTREAM, |_pad, _info| {
+                        gstreamer::PadProbeReturn::Ok
+                    })
+                    .unwrap();
+                let audiomixer_target_pad = audiomixer_target.get_request_pad("sink_%u").unwrap();
+                let audiomixer_block = audiomixer_target_pad
+                    .add_probe(gstreamer::PadProbeType::BLOCK_DOWNSTREAM, |_pad, _info| {
+                        gstreamer::PadProbeReturn::Ok
+                    })
+                    .unwrap();
+                tee_src.link(&audiomixer_target_pad).unwrap();
+                tee_src.remove_probe(tee_block);
+                audiomixer_target_pad.remove_probe(audiomixer_block);
+
+                let audiomixer_source_pad = audiomixer.get_request_pad("sink_%u").unwrap();
+                let audiomixer_block = audiomixer_source_pad
+                    .add_probe(gstreamer::PadProbeType::BLOCK_DOWNSTREAM, |_pad, _info| {
+                        gstreamer::PadProbeReturn::Ok
+                    })
+                    .unwrap();
+                let tee_target = pipeline_gstreamer
+                    .pipeline
+                    .get_by_name(&format!("{}_tee", key))
+                    .expect("can't find webrtcbin");
+                let tee_src = tee_target.get_request_pad("src_%u").unwrap();
+                let tee_block = tee_src
+                    .add_probe(gstreamer::PadProbeType::BLOCK_DOWNSTREAM, |_pad, _info| {
+                        gstreamer::PadProbeReturn::Ok
+                    })
+                    .unwrap();
+                tee_src.link(&audiomixer_source_pad).unwrap();
+                tee_src.remove_probe(tee_block);
+                audiomixer_source_pad.remove_probe(audiomixer_block);
+            }
+
+            peer.insert(self.uuid.clone(), (webrtc_source_pad.clone(), audiomixer));
+
+            info!("TEEE KETAMBAH");
         }
     }
 

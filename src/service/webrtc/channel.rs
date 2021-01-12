@@ -2,7 +2,7 @@ use crate::constants;
 use crate::models::supervisor;
 use crate::models::webrtc;
 use crate::service::webrtc::receiver;
-use actix::{Actor, Addr, Handler};
+use actix::{Actor, Addr, Handler, StreamHandler};
 use log::info;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -13,29 +13,26 @@ use gstreamer::{
 };
 
 pub struct Channel {
-    receivers: BTreeMap<String, receiver::Receiver>,
+    receivers: Arc<Mutex<BTreeMap<String, receiver::Receiver>>>,
     pipeline_gstreamer: Arc<Mutex<webrtc::GstreamerPipeline>>,
+    peer_audiomixer: Arc<Mutex<BTreeMap<String, (gstreamer::Pad, gstreamer::Element)>>>,
 }
 
 impl Channel {
     pub fn new(room_name: &String) -> Addr<Channel> {
         let pipeline = gstreamer::Pipeline::new(Some(room_name));
-
         let channel = Channel {
-            receivers: BTreeMap::new(),
+            receivers: Arc::new(Mutex::new(BTreeMap::new())),
             pipeline_gstreamer: Arc::new(Mutex::new(webrtc::GstreamerPipeline {
                 pipeline: pipeline,
             })),
+            peer_audiomixer: Arc::new(Mutex::new(BTreeMap::new())),
         };
 
         channel.start()
     }
 
-    fn create_sample_peer(
-        &self,
-        pipeline_gstreamer: &webrtc::GstreamerPipeline,
-        uuid: &String
-    ) {
+    fn create_sample_peer(&self, pipeline_gstreamer: &webrtc::GstreamerPipeline, uuid: &String) {
         let audiotestsrc = gstreamer::parse_launch(&format!(
             "audiotestsrc name={uuid}_audiotestsrc wave=silence is-live=true",
             uuid = uuid
@@ -83,8 +80,8 @@ impl Channel {
         rtpopuspay.set_property_from_str("pt", "97");
 
         self.create_sample_peer(&pipeline_gstreamer, &uuid);
-        opusenc.link(&rtpopuspay).unwrap();
         audiomixer.link(&opusenc).unwrap();
+        opusenc.link(&rtpopuspay).unwrap();
         rtpopuspay.link(&webrtcbin).unwrap();
 
         let name = room_name.clone();
@@ -109,21 +106,32 @@ impl Actor for Channel {
     type Context = actix::Context<Self>;
 }
 
+impl StreamHandler<gstreamer::Message> for Channel {
+    fn handle(&mut self, message: gstreamer::Message, _: &mut Self::Context) {
+        // info!("MASUK {:#?}", message);
+    }
+}
+
 impl Handler<supervisor::RegisterUser> for Channel {
     type Result = ();
 
-    fn handle(&mut self, user: supervisor::RegisterUser, _: &mut actix::Context<Self>) {
-        info!("LEN {}", self.receivers.len());
+    fn handle(&mut self, user: supervisor::RegisterUser, context: &mut actix::Context<Self>) {
         let webrtcbin = self.create_webrtc_pipeline(&user.uuid, &user.room_name);
-        let receiver = receiver::Receiver::new(
+
+        Self::add_stream(webrtcbin.get_bus().unwrap().stream(), context);
+
+        let new_receiver = receiver::Receiver::new(
             user.room_address,
             &user.room_name,
             &user.uuid,
             self.pipeline_gstreamer.clone(),
             webrtcbin,
+            self.peer_audiomixer.clone(),
         )
         .unwrap();
-        self.receivers.insert(user.uuid, receiver);
+        info!("REGISTER USER");
+        let mut receivers = self.receivers.lock().unwrap();
+        receivers.insert(user.uuid, new_receiver);
     }
 }
 
@@ -136,7 +144,8 @@ impl Handler<webrtc::SessionDescription> for Channel {
             sdp.room_name, sdp.from_uuid
         );
 
-        if let Some(user) = self.receivers.get(&sdp.from_uuid) {
+        let receivers = self.receivers.lock().unwrap();
+        if let Some(user) = receivers.get(&sdp.from_uuid) {
             user.on_session_answer(sdp.sdp);
         }
     }
@@ -151,7 +160,8 @@ impl Handler<webrtc::ICECandidate> for Channel {
             ice.room_name, ice.from_uuid
         );
 
-        if let Some(user) = self.receivers.get(&ice.from_uuid) {
+        let receivers = self.receivers.lock().unwrap();
+        if let Some(user) = receivers.get(&ice.from_uuid) {
             user.on_ice_answer(ice.sdp_mline_index, ice.candidate);
         }
     }
@@ -165,15 +175,35 @@ impl Handler<supervisor::DeleteUser> for Channel {
             "[ROOM: {}] [UUID: {}] [GET user FROM CHANNEL TEST]",
             user.room_name, user.uuid
         );
-        // let audioresample = pipeline_gstreamer
-        //     .pipeline
-        //     .get_by_name(&format!("{}_audioresample", user.uuid))
-        //     .expect("can't find webrtcbin");
+        // let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
 
-        // let autoaudiosink_from_uuid = pipeline_gstreamer
-        //     .pipeline
-        //     .get_by_name(&format!("{}_autoaudiosink", user.uuid))
-        //     .expect("can't find webrtcbin");
+        // pipeline_gstreamer.pipeline.call_async(move |pipeline| {
+            // let decodebin = pipeline
+            //     .get_by_name(&format!("{}_decodebin", user.uuid))
+            //     .expect("can't find webrtcbin");
+
+            // let audiotestsrc = pipeline
+            //     .get_by_name(&format!("{}_audiotestsrc", user.uuid))
+            //     .expect("can't find webrtcbin");
+
+            // let audiotestsrc_pad = audiotestsrc.get_static_pad("src").unwrap();
+
+            // let audio_block = audiotestsrc_pad
+            //     .add_probe(gstreamer::PadProbeType::BLOCK_DOWNSTREAM, |_pad, _info| {
+            //         gstreamer::PadProbeReturn::Ok
+            //     })
+            //     .unwrap();
+
+            // audiotestsrc
+            //     .set_state(gstreamer::State::Null)
+            //     .expect("Couldn't set pipeline to Playing");
+            // audiotestsrc_pad.remove_probe(audio_block);
+            // pipeline.remove(&audiotestsrc);
+            // pipeline
+            //     .set_state(gstreamer::State::Playing)
+            //     .expect("Couldn't set pipeline to Playing");
+            // info!("STOPPP");
+        // });
 
         // let autoaudiosink_to_uuid = pipeline_gstreamer
         //     .pipeline

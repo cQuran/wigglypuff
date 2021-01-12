@@ -115,12 +115,12 @@ pub async fn kick_user(
             to_uuid: request.to_uuid.to_owned()
         });
 
-    // let _ = room_address
-    //     .get_ref()
-    //     .do_send(models_room::KickUser {
-    //         uuid: request.uuid.to_owned(),
-    //         room_name: request.room_name.to_owned(),
-    //     });
+    let _ = room_address
+        .get_ref()
+        .do_send(models_room::KickUser {
+            uuid: request.uuid.to_owned(),
+            room_name: request.room_name.to_owned(),
+        });
 
     Ok(HttpResponse::Ok().json(response::ResponseBody::new(
         constants::MESSAGE_OK,
