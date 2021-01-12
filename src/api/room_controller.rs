@@ -112,7 +112,6 @@ pub async fn kick_user(
         .do_send(supervisor::DeleteUser {
             uuid: request.uuid.to_owned(),
             room_name: request.room_name.to_owned(),
-            to_uuid: request.to_uuid.to_owned()
         });
 
     let _ = room_address

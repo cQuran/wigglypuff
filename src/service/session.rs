@@ -39,8 +39,6 @@ impl Actor for Session {
             .webrtc_supervisor_address
             .do_send(models::supervisor::DeleteUser {
                 uuid: self.uuid.clone(),
-                // TODO DLETE
-                to_uuid: self.uuid.clone(),
                 room_name: self.room_name.clone(),
             });
 

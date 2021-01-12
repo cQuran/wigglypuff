@@ -15,6 +15,5 @@ pub struct RegisterUser {
 #[rtype(result = "()")]
 pub struct DeleteUser {
     pub uuid: String,
-    pub to_uuid: String,
     pub room_name: String,
 }

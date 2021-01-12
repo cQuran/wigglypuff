@@ -175,42 +175,5 @@ impl Handler<supervisor::DeleteUser> for Channel {
             "[ROOM: {}] [UUID: {}] [GET user FROM CHANNEL TEST]",
             user.room_name, user.uuid
         );
-        // let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
-
-        // pipeline_gstreamer.pipeline.call_async(move |pipeline| {
-            // let decodebin = pipeline
-            //     .get_by_name(&format!("{}_decodebin", user.uuid))
-            //     .expect("can't find webrtcbin");
-
-            // let audiotestsrc = pipeline
-            //     .get_by_name(&format!("{}_audiotestsrc", user.uuid))
-            //     .expect("can't find webrtcbin");
-
-            // let audiotestsrc_pad = audiotestsrc.get_static_pad("src").unwrap();
-
-            // let audio_block = audiotestsrc_pad
-            //     .add_probe(gstreamer::PadProbeType::BLOCK_DOWNSTREAM, |_pad, _info| {
-            //         gstreamer::PadProbeReturn::Ok
-            //     })
-            //     .unwrap();
-
-            // audiotestsrc
-            //     .set_state(gstreamer::State::Null)
-            //     .expect("Couldn't set pipeline to Playing");
-            // audiotestsrc_pad.remove_probe(audio_block);
-            // pipeline.remove(&audiotestsrc);
-            // pipeline
-            //     .set_state(gstreamer::State::Playing)
-            //     .expect("Couldn't set pipeline to Playing");
-            // info!("STOPPP");
-        // });
-
-        // let autoaudiosink_to_uuid = pipeline_gstreamer
-        //     .pipeline
-        //     .get_by_name(&format!("{}_autoaudiosink", user.to_uuid))
-        //     .expect("can't find webrtcbin");
-
-        // audioresample.unlink(&autoaudiosink_from_uuid);
-        // audioresample.link(&autoaudiosink_to_uuid).unwrap();
     }
 }

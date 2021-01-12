@@ -84,12 +84,5 @@ impl Handler<supervisor::DeleteUser> for Supervisor {
         if let Some(channel) = self.channels.get(&user.room_name) {
             channel.do_send(user);
         }
-        // self.pipeline
-        //     .set_state(gstreamer::State::Null)
-        //     .expect("Failed to set the pipeline state to null");
-
-        // if let Some(channel) = self.users.get(&user.room_name) {
-        //     channel.do_send(webrtc::Kill {});
-        // }
     }
 }
