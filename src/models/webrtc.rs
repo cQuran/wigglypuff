@@ -2,6 +2,13 @@ use crate::models::message_websocket;
 use actix_derive::Message;
 use serde::{Deserialize, Serialize};
 
+pub struct ReceiverPipeline {
+    pub fakeaudio: gstreamer::Bin,
+    pub webrtcbin: gstreamer::Bin,
+    pub tee: gstreamer::Bin,
+    pub fakesink: gstreamer::Bin,
+}
+
 #[derive(Message, Deserialize, Serialize)]
 #[rtype(result = "()")]
 pub struct ICECandidate {
@@ -15,7 +22,7 @@ pub struct ICECandidate {
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
 pub struct GstreamerPipeline {
-    pub pipeline: gstreamer::Pipeline
+    pub pipeline: gstreamer::Pipeline,
 }
 
 #[derive(Message, Serialize)]

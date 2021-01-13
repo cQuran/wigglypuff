@@ -8,85 +8,147 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use gstreamer;
-use gstreamer::{
-    ElementExt, ElementExtManual, GObjectExtManualGst, GstBinExt, GstBinExtManual, PadExtManual,
-};
+use gstreamer::{ElementExt, ElementExtManual, GstBinExt};
 
 pub struct Channel {
     receivers: Arc<Mutex<BTreeMap<String, receiver::Receiver>>>,
     pipeline_gstreamer: Arc<Mutex<webrtc::GstreamerPipeline>>,
-    peer_audiomixer: Arc<Mutex<BTreeMap<String, (gstreamer::Pad, gstreamer::Element)>>>,
 }
 
 impl Channel {
-    pub fn new(room_name: &String) -> Addr<Channel> {
+    pub fn new(room_name: &str) -> Addr<Channel> {
         let pipeline = gstreamer::Pipeline::new(Some(room_name));
+        let pipeline_gstreamer =
+            Arc::new(Mutex::new(webrtc::GstreamerPipeline { pipeline: pipeline }));
         let channel = Channel {
             receivers: Arc::new(Mutex::new(BTreeMap::new())),
-            pipeline_gstreamer: Arc::new(Mutex::new(webrtc::GstreamerPipeline {
-                pipeline: pipeline,
-            })),
-            peer_audiomixer: Arc::new(Mutex::new(BTreeMap::new())),
+            pipeline_gstreamer: pipeline_gstreamer,
         };
 
         channel.start()
     }
 
-    fn create_sample_peer(&self, pipeline_gstreamer: &webrtc::GstreamerPipeline, uuid: &String) {
-        let audiotestsrc = gstreamer::parse_launch(&format!(
-            "audiotestsrc name={uuid}_audiotestsrc wave=silence is-live=true",
-            uuid = uuid
-        ))
+    fn create_fakeaudio(
+        &self,
+        pipeline_gstreamer: &webrtc::GstreamerPipeline,
+        uuid: &str,
+    ) -> gstreamer::Bin {
+        let fakeaudio = gstreamer::parse_bin_from_description(
+            &format!(
+                "audiotestsrc wave=sine is-live=true ! opusenc name={uuid}_opusenc",
+                uuid = uuid
+            ),
+            false,
+        )
         .unwrap();
-        pipeline_gstreamer
-            .pipeline
-            .add_many(&[&audiotestsrc])
-            .unwrap();
+        let opusenc = fakeaudio.get_by_name(&format!("{}_opusenc", uuid)).unwrap();
 
-        let audiomixer = pipeline_gstreamer
-            .pipeline
-            .get_by_name(&format!("{}_audiomixer", uuid))
-            .expect("can't find webrtcbin");
+        let opusenc_pad = gstreamer::GhostPad::with_target(
+            Some(&format!("{}_opusenc_src", uuid)),
+            &opusenc.get_static_pad("src").unwrap(),
+        )
+        .unwrap();
 
-        let audiotestsrc_pad = audiotestsrc.get_static_pad("src").unwrap();
-        let audiomixer_pad = audiomixer.get_request_pad("sink_%u").unwrap();
-        audiotestsrc_pad.link(&audiomixer_pad).unwrap();
+        fakeaudio.add_pad(&opusenc_pad).unwrap();
+        pipeline_gstreamer.pipeline.add(&fakeaudio).unwrap();
+
+        fakeaudio
     }
 
-    fn create_webrtc_pipeline(&self, uuid: &String, room_name: &String) -> gstreamer::Element {
-        let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
+    fn create_webrtcbin(
+        &self,
+        pipeline_gstreamer: &webrtc::GstreamerPipeline,
+        uuid: &str,
+    ) -> gstreamer::Bin {
+        let receiver = gstreamer::parse_bin_from_description(&format!(
+            "rtpopuspay name={uuid}_rtpopuspay pt=97 ! webrtcbin name={uuid}_webrtcbin bundle-policy=max-bundle stun-server={stun_server} ! rtpopusdepay name={uuid}_rtpopusdepay",
+            uuid = uuid,
+            stun_server = constants::STUN_SERVER
+        ), false).unwrap();
 
-        let audiomixer =
-            gstreamer::ElementFactory::make("audiomixer", Some(&format!("{}_audiomixer", uuid)))
-                .unwrap();
+        let rtpopuspay = receiver
+            .get_by_name(&format!("{}_rtpopuspay", uuid))
+            .expect("can't find rtpopuspay");
 
-        let opusenc =
-            gstreamer::ElementFactory::make("opusenc", Some(&format!("{}_opusenc", uuid))).unwrap();
+        let rtpopuspay_sink_pad = gstreamer::GhostPad::with_target(
+            Some(&format!("{}_audiosink", uuid)),
+            &rtpopuspay.get_static_pad("sink").unwrap(),
+        )
+        .unwrap();
+        receiver.add_pad(&rtpopuspay_sink_pad).unwrap();
 
-        let rtpopuspay =
-            gstreamer::ElementFactory::make("rtpopuspay", Some(&format!("{}_rtpopuspay", uuid)))
-                .unwrap();
+        let rtpopusdepay = receiver
+            .get_by_name(&format!("{}_rtpopusdepay", uuid))
+            .expect("can't find rtpopuspay");
 
-        let webrtcbin = gstreamer::ElementFactory::make("webrtcbin", Some(uuid))
-            .expect("Could not instanciate webrtcbin");
+        let rtpopusdepay_src_pad = gstreamer::GhostPad::with_target(
+            Some(&format!("{}_audiosrc", uuid)),
+            &rtpopusdepay.get_static_pad("src").unwrap(),
+        )
+        .unwrap();
+        receiver.add_pad(&rtpopusdepay_src_pad).unwrap();
+        pipeline_gstreamer.pipeline.add(&receiver).unwrap();
 
-        webrtcbin.set_property_from_str("stun-server", constants::STUN_SERVER);
-        webrtcbin.set_property_from_str("bundle-policy", "max-bundle");
+        receiver
+    }
 
-        pipeline_gstreamer
-            .pipeline
-            .add_many(&[&audiomixer, &opusenc, &rtpopuspay, &webrtcbin])
+    fn create_fakesink(
+        &self,
+        pipeline_gstreamer: &webrtc::GstreamerPipeline,
+        uuid: &str,
+    ) -> gstreamer::Bin {
+        let fakesinkbin = gstreamer::parse_bin_from_description(
+            &format!("fakesink name={uuid}_fakesink sync=false", uuid = uuid),
+            false,
+        )
+        .unwrap();
+        let fakesink = fakesinkbin
+            .get_by_name(&format!("{}_fakesink", uuid))
             .unwrap();
-        rtpopuspay.set_property_from_str("pt", "97");
 
-        self.create_sample_peer(&pipeline_gstreamer, &uuid);
-        audiomixer.link(&opusenc).unwrap();
-        opusenc.link(&rtpopuspay).unwrap();
-        rtpopuspay.link(&webrtcbin).unwrap();
+        let fakesink_pad = gstreamer::GhostPad::with_target(
+            Some(&format!("{}_fakesink_sink", uuid)),
+            &fakesink.get_static_pad("sink").unwrap(),
+        )
+        .unwrap();
+        fakesinkbin.add_pad(&fakesink_pad).unwrap();
+        pipeline_gstreamer.pipeline.add(&fakesinkbin).unwrap();
 
-        let name = room_name.clone();
+        fakesinkbin
+    }
+
+    fn create_teeadapter(
+        &self,
+        pipeline_gstreamer: &webrtc::GstreamerPipeline,
+        uuid: &str,
+    ) -> gstreamer::Bin {
+        let teebin = gstreamer::parse_bin_from_description(
+            &format!("tee name={uuid}_tee", uuid = uuid),
+            false,
+        )
+        .unwrap();
+        let tee = teebin.get_by_name(&format!("{}_tee", uuid)).unwrap();
+
+        let teesink_pad = gstreamer::GhostPad::with_target(
+            Some(&format!("{}_tee_sink", uuid)),
+            &tee.get_static_pad("sink").unwrap(),
+        )
+        .unwrap();
+        teebin.add_pad(&teesink_pad).unwrap();
+
+        let teesrc_pad = gstreamer::GhostPad::with_target(
+            Some(&format!("{}_tee_src", uuid)),
+            &tee.get_request_pad("src_%u").unwrap(),
+        )
+        .unwrap();
+        teebin.add_pad(&teesrc_pad).unwrap();
+        pipeline_gstreamer.pipeline.add(&teebin).unwrap();
+
+        teebin
+    }
+
+    fn play_pipeline(&self, pipeline_gstreamer: &webrtc::GstreamerPipeline) {
         pipeline_gstreamer.pipeline.call_async(move |pipeline| {
-            info!("[ROOM: {}] STARTING GSTREAMER PIPELINE", name);
             if pipeline.set_state(gstreamer::State::Playing).is_err() {
                 info!("Failed to set pipeline to Playing");
             }
@@ -97,8 +159,25 @@ impl Channel {
                 .set_state(gstreamer::State::Playing)
                 .expect("Couldn't set pipeline to Playing");
         });
+    }
 
-        webrtcbin
+    fn build_gstreamer(&self, uuid: &str) -> webrtc::ReceiverPipeline {
+        let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
+        let fakeaudio = self.create_fakeaudio(&pipeline_gstreamer, &uuid);
+        let webrtcbin = self.create_webrtcbin(&pipeline_gstreamer, &uuid);
+        let tee = self.create_teeadapter(&pipeline_gstreamer, &uuid);
+        let fakesink = self.create_fakesink(&pipeline_gstreamer, &uuid);
+        fakeaudio.link(&webrtcbin).unwrap();
+        webrtcbin.link(&tee).unwrap();
+        tee.link(&fakesink).unwrap();
+        self.play_pipeline(&pipeline_gstreamer);
+
+        webrtc::ReceiverPipeline {
+            fakeaudio,
+            webrtcbin,
+            tee,
+            fakesink,
+        }
     }
 }
 
@@ -107,30 +186,29 @@ impl Actor for Channel {
 }
 
 impl StreamHandler<gstreamer::Message> for Channel {
-    fn handle(&mut self, message: gstreamer::Message, _: &mut Self::Context) {
-        // info!("MASUK {:#?}", message);
+    fn handle(&mut self, _message: gstreamer::Message, _: &mut Self::Context) {
+        // info!("MASUK {:#?}", message.view());
     }
 }
 
 impl Handler<supervisor::RegisterUser> for Channel {
     type Result = ();
 
-    fn handle(&mut self, user: supervisor::RegisterUser, context: &mut actix::Context<Self>) {
-        let webrtcbin = self.create_webrtc_pipeline(&user.uuid, &user.room_name);
-
-        Self::add_stream(webrtcbin.get_bus().unwrap().stream(), context);
+    fn handle(&mut self, user: supervisor::RegisterUser, _: &mut actix::Context<Self>) {
+        // Self::add_stream(fakeaudio.get_bus().unwrap().stream(), context);
+        // Self::add_stream(receiver.get_bus().unwrap().stream(), context);
+        let receiver_pipeline = self.build_gstreamer(&user.uuid);
 
         let new_receiver = receiver::Receiver::new(
             user.room_address,
             &user.room_name,
             &user.uuid,
-            self.pipeline_gstreamer.clone(),
-            webrtcbin,
-            self.peer_audiomixer.clone(),
+            receiver_pipeline,
         )
         .unwrap();
-        info!("REGISTER USER");
+
         let mut receivers = self.receivers.lock().unwrap();
+
         receivers.insert(user.uuid, new_receiver);
     }
 }
@@ -175,5 +253,10 @@ impl Handler<supervisor::DeleteUser> for Channel {
             "[ROOM: {}] [UUID: {}] [GET user FROM CHANNEL TEST]",
             user.room_name, user.uuid
         );
+
+        let receivers = self.receivers.lock().unwrap();
+        if let Some(user) = receivers.get(&user.uuid) {
+            let _ = user.stop_fakeaudio();
+        }
     }
 }
