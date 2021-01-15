@@ -78,7 +78,7 @@ impl Handler<supervisor::DeleteUser> for Supervisor {
 
     fn handle(&mut self, user: supervisor::DeleteUser, _: &mut Context<Self>) {
         info!(
-            "[ROOM: {}] [UUID: {}] [DELETE USER (RECEIVER)]",
+            "[ROOM: {}] [UUID: {}] [DELETE USER (USER)]",
             user.room_name, user.uuid
         );
         if let Some(channel) = self.channels.get(&user.room_name) {

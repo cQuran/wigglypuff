@@ -1,7 +1,7 @@
 use crate::constants;
 use crate::models::supervisor;
 use crate::models::webrtc;
-use crate::service::webrtc::receiver;
+use crate::service::webrtc::user;
 use actix::{Actor, Addr, Handler, StreamHandler};
 use log::info;
 use std::collections::BTreeMap;
@@ -11,7 +11,7 @@ use gstreamer;
 use gstreamer::{ElementExt, ElementExtManual, GstBinExt};
 
 pub struct Channel {
-    receivers: Arc<Mutex<BTreeMap<String, receiver::Receiver>>>,
+    users: Arc<Mutex<BTreeMap<String, user::User>>>,
     pipeline_gstreamer: Arc<Mutex<webrtc::GstreamerPipeline>>,
 }
 
@@ -21,7 +21,7 @@ impl Channel {
         let pipeline_gstreamer =
             Arc::new(Mutex::new(webrtc::GstreamerPipeline { pipeline: pipeline }));
         let channel = Channel {
-            receivers: Arc::new(Mutex::new(BTreeMap::new())),
+            users: Arc::new(Mutex::new(BTreeMap::new())),
             pipeline_gstreamer: pipeline_gstreamer,
         };
 
@@ -60,13 +60,13 @@ impl Channel {
         pipeline_gstreamer: &webrtc::GstreamerPipeline,
         uuid: &str,
     ) -> gstreamer::Bin {
-        let receiver = gstreamer::parse_bin_from_description(&format!(
+        let user = gstreamer::parse_bin_from_description(&format!(
             "rtpopuspay name={uuid}_rtpopuspay pt=97 ! webrtcbin name={uuid}_webrtcbin bundle-policy=max-bundle stun-server={stun_server} ! rtpopusdepay name={uuid}_rtpopusdepay",
             uuid = uuid,
             stun_server = constants::STUN_SERVER
         ), false).unwrap();
 
-        let rtpopuspay = receiver
+        let rtpopuspay = user
             .get_by_name(&format!("{}_rtpopuspay", uuid))
             .expect("can't find rtpopuspay");
 
@@ -75,9 +75,10 @@ impl Channel {
             &rtpopuspay.get_static_pad("sink").unwrap(),
         )
         .unwrap();
-        receiver.add_pad(&rtpopuspay_sink_pad).unwrap();
 
-        let rtpopusdepay = receiver
+        user.add_pad(&rtpopuspay_sink_pad).unwrap();
+
+        let rtpopusdepay = user
             .get_by_name(&format!("{}_rtpopusdepay", uuid))
             .expect("can't find rtpopuspay");
 
@@ -86,10 +87,10 @@ impl Channel {
             &rtpopusdepay.get_static_pad("src").unwrap(),
         )
         .unwrap();
-        receiver.add_pad(&rtpopusdepay_src_pad).unwrap();
-        pipeline_gstreamer.pipeline.add(&receiver).unwrap();
+        user.add_pad(&rtpopusdepay_src_pad).unwrap();
+        pipeline_gstreamer.pipeline.add(&user).unwrap();
 
-        receiver
+        user
     }
 
     fn create_fakesink(
@@ -161,22 +162,24 @@ impl Channel {
         });
     }
 
-    fn build_gstreamer(&self, uuid: &str) -> webrtc::ReceiverPipeline {
+    fn build_gstreamer(&self, uuid: &str) -> webrtc::UserPipeline {
         let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
         let fakeaudio = self.create_fakeaudio(&pipeline_gstreamer, &uuid);
         let webrtcbin = self.create_webrtcbin(&pipeline_gstreamer, &uuid);
         let tee = self.create_teeadapter(&pipeline_gstreamer, &uuid);
         let fakesink = self.create_fakesink(&pipeline_gstreamer, &uuid);
+        let role = webrtc::Role::Producer;
         fakeaudio.link(&webrtcbin).unwrap();
         webrtcbin.link(&tee).unwrap();
         tee.link(&fakesink).unwrap();
         self.play_pipeline(&pipeline_gstreamer);
 
-        webrtc::ReceiverPipeline {
+        webrtc::UserPipeline {
             fakeaudio,
             webrtcbin,
             tee,
             fakesink,
+            role,
         }
     }
 }
@@ -186,7 +189,7 @@ impl Actor for Channel {
 }
 
 impl StreamHandler<gstreamer::Message> for Channel {
-    fn handle(&mut self, _message: gstreamer::Message, _: &mut Self::Context) {
+    fn handle(&mut self, message: gstreamer::Message, _: &mut Self::Context) {
         // info!("MASUK {:#?}", message.view());
     }
 }
@@ -194,22 +197,19 @@ impl StreamHandler<gstreamer::Message> for Channel {
 impl Handler<supervisor::RegisterUser> for Channel {
     type Result = ();
 
-    fn handle(&mut self, user: supervisor::RegisterUser, _: &mut actix::Context<Self>) {
-        // Self::add_stream(fakeaudio.get_bus().unwrap().stream(), context);
-        // Self::add_stream(receiver.get_bus().unwrap().stream(), context);
-        let receiver_pipeline = self.build_gstreamer(&user.uuid);
+    fn handle(&mut self, user: supervisor::RegisterUser, context: &mut actix::Context<Self>) {
+        let user_pipeline = self.build_gstreamer(&user.uuid);
 
-        let new_receiver = receiver::Receiver::new(
+        let new_user = user::User::new(
             user.room_address,
             &user.room_name,
             &user.uuid,
-            receiver_pipeline,
+            user_pipeline,
         )
         .unwrap();
 
-        let mut receivers = self.receivers.lock().unwrap();
-
-        receivers.insert(user.uuid, new_receiver);
+        let mut users = self.users.lock().unwrap();
+        users.insert(user.uuid, new_user);
     }
 }
 
@@ -222,8 +222,8 @@ impl Handler<webrtc::SessionDescription> for Channel {
             sdp.room_name, sdp.from_uuid
         );
 
-        let receivers = self.receivers.lock().unwrap();
-        if let Some(user) = receivers.get(&sdp.from_uuid) {
+        let users = self.users.lock().unwrap();
+        if let Some(user) = users.get(&sdp.from_uuid) {
             user.on_session_answer(sdp.sdp);
         }
     }
@@ -238,8 +238,8 @@ impl Handler<webrtc::ICECandidate> for Channel {
             ice.room_name, ice.from_uuid
         );
 
-        let receivers = self.receivers.lock().unwrap();
-        if let Some(user) = receivers.get(&ice.from_uuid) {
+        let users = self.users.lock().unwrap();
+        if let Some(user) = users.get(&ice.from_uuid) {
             user.on_ice_answer(ice.sdp_mline_index, ice.candidate);
         }
     }
@@ -254,9 +254,9 @@ impl Handler<supervisor::DeleteUser> for Channel {
             user.room_name, user.uuid
         );
 
-        let receivers = self.receivers.lock().unwrap();
-        if let Some(user) = receivers.get(&user.uuid) {
-            let _ = user.stop_fakeaudio();
-        }
+        // let users = self.users.lock().unwrap();
+        // if let Some(user) = users.get(&user.uuid) {
+        //     let _ = user.stop_fakeaudio();
+        // }
     }
 }

@@ -2,11 +2,17 @@ use crate::models::message_websocket;
 use actix_derive::Message;
 use serde::{Deserialize, Serialize};
 
-pub struct ReceiverPipeline {
+pub enum Role {
+    Consumer,
+    Producer
+}
+
+pub struct UserPipeline {
     pub fakeaudio: gstreamer::Bin,
     pub webrtcbin: gstreamer::Bin,
     pub tee: gstreamer::Bin,
     pub fakesink: gstreamer::Bin,
+    pub role: Role,
 }
 
 #[derive(Message, Deserialize, Serialize)]

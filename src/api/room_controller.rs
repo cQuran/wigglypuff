@@ -104,7 +104,7 @@ pub async fn delete_room(
 pub async fn kick_user(
     request: web::Json<supervisor::DeleteUser>,
     supervisor_webrtc_address: web::Data<Addr<webrtc::supervisor::Supervisor>>,
-    _room_address: web::Data<Addr<service_room::Room>>,
+    room_address: web::Data<Addr<service_room::Room>>,
 ) -> Result<HttpResponse, Error> {
 
     let _ = supervisor_webrtc_address
@@ -114,12 +114,12 @@ pub async fn kick_user(
             room_name: request.room_name.to_owned(),
         });
 
-    // let _ = room_address
-    //     .get_ref()
-    //     .do_send(models_room::KickUser {
-    //         uuid: request.uuid.to_owned(),
-    //         room_name: request.room_name.to_owned(),
-    //     });
+    let _ = room_address
+        .get_ref()
+        .do_send(models_room::KickUser {
+            uuid: request.uuid.to_owned(),
+            room_name: request.room_name.to_owned(),
+        });
 
     Ok(HttpResponse::Ok().json(response::ResponseBody::new(
         constants::MESSAGE_OK,

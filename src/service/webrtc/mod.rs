@@ -1,3 +1,3 @@
-pub mod receiver;
+pub mod user;
 pub mod supervisor;
 pub mod channel;

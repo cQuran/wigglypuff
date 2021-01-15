@@ -2,6 +2,7 @@ use crate::models::{message_websocket, webrtc};
 use crate::service::room as service_room;
 use actix::Addr;
 use anyhow::Error;
+use glib::ToValue;
 use gstreamer;
 use gstreamer::{prelude::ObjectExt, ElementExtManual, GstBinExt};
 use log::info;
@@ -19,56 +20,56 @@ macro_rules! upgrade_app_weak_reference {
     };
 }
 
-pub struct ReceiverInner {
+pub struct UserInner {
     pub room_address: Addr<service_room::Room>,
     pub room_name: String,
     pub uuid: String,
-    pub pipeline: webrtc::ReceiverPipeline,
+    pub pipeline: webrtc::UserPipeline,
 }
 
 #[derive(Clone)]
-pub struct Receiver(pub Arc<ReceiverInner>);
+pub struct User(pub Arc<UserInner>);
 
 #[derive(Clone)]
-pub struct ReceiverWeak(pub Weak<ReceiverInner>);
+pub struct UserWeak(pub Weak<UserInner>);
 
-impl std::ops::Deref for Receiver {
-    type Target = ReceiverInner;
+impl std::ops::Deref for User {
+    type Target = UserInner;
 
-    fn deref(&self) -> &ReceiverInner {
+    fn deref(&self) -> &UserInner {
         &self.0
     }
 }
 
-impl ReceiverWeak {
-    pub fn upgrade_to_strong_reference(&self) -> Option<Receiver> {
-        self.0.upgrade().map(Receiver)
+impl UserWeak {
+    pub fn upgrade_to_strong_reference(&self) -> Option<User> {
+        self.0.upgrade().map(User)
     }
 }
 
-impl Receiver {
+impl User {
     pub fn new(
         room_address: Addr<service_room::Room>,
         requst_room_name: &String,
         request_uuid: &String,
-        pipeline: webrtc::ReceiverPipeline,
+        pipeline: webrtc::UserPipeline,
     ) -> Result<Self, Error> {
         info!(
-            "[ROOM: {}] [UUID: {}] Creating WebRTC Receiver Instance",
+            "[ROOM: {}] [UUID: {}] Creating WebRTC User Instance",
             requst_room_name, request_uuid
         );
 
         let uuid = request_uuid.to_string();
         let room_name = requst_room_name.to_string();
-        let receiver = Receiver(Arc::new(ReceiverInner {
+        let user = User(Arc::new(UserInner {
             room_address,
             room_name,
             uuid,
             pipeline,
         }));
 
-        let receiver_clone = receiver.downgrade_to_weak_reference();
-        let webrtcbin = receiver
+        let user_clone = user.downgrade_to_weak_reference();
+        let webrtcbin = user
             .pipeline
             .webrtcbin
             .get_by_name(&format!("{}_webrtcbin", request_uuid))
@@ -76,33 +77,30 @@ impl Receiver {
 
         webrtcbin
             .connect("on-negotiation-needed", false, move |_values| {
-                let receiver = upgrade_app_weak_reference!(receiver_clone, None);
-                receiver.on_negotiation_needed();
+                let user = upgrade_app_weak_reference!(user_clone, None);
+                user.on_negotiation_needed();
                 None
             })
             .unwrap();
 
-        let receiver_clone = receiver.downgrade_to_weak_reference();
+        let user_clone = user.downgrade_to_weak_reference();
         webrtcbin
             .connect("on-ice-candidate", false, move |values| {
-                let _webrtc = values[0]
-                    .get::<gstreamer::Element>()
-                    .expect("Invalid argument");
                 let sdp_mline_index = values[1].get_some::<u32>().expect("Invalid argument");
                 let candidate = values[2]
                     .get::<String>()
                     .expect("Invalid argument")
                     .unwrap();
 
-                let receiver = upgrade_app_weak_reference!(receiver_clone, None);
-                receiver.on_ice_candidate(&candidate, &sdp_mline_index);
+                let user = upgrade_app_weak_reference!(user_clone, None);
+                user.on_ice_candidate(&candidate, &sdp_mline_index);
                 None
             })
             .unwrap();
 
         let room_name_copy = requst_room_name.to_string();
         let uuid_copy = request_uuid.to_string();
-        webrtcbin.connect_notify(Some("connection-state"), move |webrtcbin, _spec| {
+        webrtcbin.connect_notify(Some("connection-state"), move |webrtcbin, _| {
             let connection = webrtcbin
                 .get_property("connection-state")
                 .unwrap()
@@ -119,7 +117,7 @@ impl Receiver {
         let room_name_copy = requst_room_name.to_string();
         let uuid_copy = request_uuid.to_string();
 
-        webrtcbin.connect_notify(Some("ice-connection-state"), move |webrtcbin, _spec| {
+        webrtcbin.connect_notify(Some("ice-connection-state"), move |webrtcbin, _| {
             let ice_connection = webrtcbin
                 .get_property("ice-connection-state")
                 .unwrap()
@@ -135,7 +133,7 @@ impl Receiver {
 
         let room_name_copy = requst_room_name.to_string();
         let uuid_copy = request_uuid.to_string();
-        webrtcbin.connect_notify(Some("ice-gathering-state"), move |webrtcbin, _spec| {
+        webrtcbin.connect_notify(Some("ice-gathering-state"), move |webrtcbin, _| {
             let gather_connection = webrtcbin
                 .get_property("ice-gathering-state")
                 .unwrap()
@@ -151,7 +149,7 @@ impl Receiver {
 
         let room_name_copy = requst_room_name.to_string();
         let uuid_copy = request_uuid.to_string();
-        webrtcbin.connect_notify(Some("signaling-state"), move |webrtcbin, _spec| {
+        webrtcbin.connect_notify(Some("signaling-state"), move |webrtcbin, _| {
             let signalling = webrtcbin
                 .get_property("signaling-state")
                 .unwrap()
@@ -164,18 +162,15 @@ impl Receiver {
                 signalling.unwrap()
             );
         });
-        Ok(receiver)
+        Ok(user)
     }
 
     pub fn stop_fakeaudio(&self) {
-        let _ = self
-            .pipeline
-            .fakeaudio
-            .set_state(gstreamer::State::Null);
+        let _ = self.pipeline.fakeaudio.set_state(gstreamer::State::Null);
     }
 
-    pub fn downgrade_to_weak_reference(&self) -> ReceiverWeak {
-        ReceiverWeak(Arc::downgrade(&self.0))
+    pub fn downgrade_to_weak_reference(&self) -> UserWeak {
+        UserWeak(Arc::downgrade(&self.0))
     }
 
     pub fn on_session_answer(&self, session_description_request: String) {
@@ -219,10 +214,10 @@ impl Receiver {
             "[ROOM: {}] [UUID: {}] [WEBRTC] [STARTING NEGOTIATION]",
             self.room_name, self.uuid
         );
-        let receiver_clone = self.downgrade_to_weak_reference();
+        let user_clone = self.downgrade_to_weak_reference();
         let promise = gstreamer::Promise::with_change_func(move |reply| {
-            let receiver = upgrade_app_weak_reference!(receiver_clone);
-            receiver.on_offer_created(reply);
+            let user = upgrade_app_weak_reference!(user_clone);
+            user.on_offer_created(reply);
         });
 
         let webrtcbin = self
@@ -230,6 +225,25 @@ impl Receiver {
             .webrtcbin
             .get_by_name(&format!("{}_webrtcbin", self.uuid))
             .expect("can't find webrtcbin");
+
+        if let Ok(transceiver) = webrtcbin.emit("get-transceiver", &[&0.to_value()]) {
+            if let Some(t) = transceiver {
+                if let Ok(obj) = t.get::<glib::Object>() {
+                    let role = match self.pipeline.role {
+                        webrtc::Role::Consumer {} => {
+                            gstreamer_webrtc::WebRTCRTPTransceiverDirection::Sendonly
+                        }
+                        webrtc::Role::Producer {} => {
+                            gstreamer_webrtc::WebRTCRTPTransceiverDirection::Recvonly
+                        }
+                    };
+                    obj.expect("Error set Transceiver")
+                        .set_property("direction", &role)
+                        .unwrap();
+                }
+            }
+        }
+        info!("DONEEEE");
 
         webrtcbin
             .emit("create-offer", &[&None::<gstreamer::Structure>, &promise])
