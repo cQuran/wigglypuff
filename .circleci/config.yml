@@ -8,5 +8,5 @@ jobs:
 
       # build the application image
       - run:
-          command: docker build -f ./docker/alpine/Dockerfile -t cquran.my.id:5000/wigglypuff .
+          command: docker build -f ./docker/alpine/Dockerfile -t cquran.my.id:5000/wigglypuff . && docker push cquran.my.id:5000/wigglypuff
           no_output_timeout: 1h
