@@ -30,10 +30,12 @@ pub enum MessageSocketType {
         candidate: String,
         #[serde(rename = "sdpMLineIndex")]
         sdp_mline_index: u32,
+        uuid: String,
     },
     SessionDescription {
         #[serde(rename = "type")]
         types: String,
         sdp: String,
+        uuid: String,
     }
 }

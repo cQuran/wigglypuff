@@ -155,9 +155,20 @@ impl Handler<room::DeleteRoom> for Room {
 impl Handler<webrtc::WigglypuffWebRTC> for Room {
     type Result = ();
 
-    fn handle(&mut self, webrtc: webrtc::WigglypuffWebRTC, _: &mut Context<Self>) {
+    fn handle(&mut self, mut webrtc: webrtc::WigglypuffWebRTC, _: &mut Context<Self>) {
+        let (uuid_src, uuid_sink) = match webrtc.role {
+            webrtc::Role::Producer {} => (webrtc.uuid.clone(), webrtc.uuid.clone()),
+            webrtc::Role::Consumer {} => {
+                info!("INI CONSUMERRR");
+                let result: Vec<&str> = webrtc.uuid.split("_sink:").collect();
+                (result[0][4..].to_string(), result[1].to_string())
+            }
+        };
+        info!("OKKKKKKK {} {}", uuid_src, uuid_sink);
+
+        webrtc.uuid = uuid_sink;
         let message = serde_json::to_string(&webrtc).unwrap();
-        self.send_user(&webrtc.uuid, &webrtc.room_name, &message);
+        self.send_user(&uuid_src, &webrtc.room_name, &message);
     }
 }
 
@@ -178,10 +189,12 @@ impl Room {
         }
     }
     fn send_user(&self, to_uuid: &str, room_name: &str, message: &str) {
-        info!(
-            "[ROOM: {}] [TO UUID: {}] [SEND USER] [MESSAGE: {}]",
-            room_name, to_uuid, message
-        );
+        // info!(
+        //     "[ROOM: {}] [TO UUID: {}] [SEND USER] [MESSAGE: {}]",
+        //     room_name, to_uuid, message
+        // );
+        // TODO
+        info!("[ROOM: {}] [TO UUID: {}] [SEND USER]", room_name, to_uuid);
         if let Some(sessions) = self.rooms.get(room_name) {
             for session in sessions {
                 if *session == to_uuid {

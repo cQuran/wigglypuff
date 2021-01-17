@@ -4,7 +4,7 @@ use actix::Addr;
 use anyhow::Error;
 use glib::ToValue;
 use gstreamer;
-use gstreamer::{prelude::ObjectExt, ElementExtManual, GstBinExt};
+use gstreamer::{prelude::ObjectExt, GstBinExt};
 use log::info;
 use std::sync::{Arc, Weak};
 
@@ -106,12 +106,12 @@ impl User {
                 .unwrap()
                 .get::<gstreamer_webrtc::WebRTCPeerConnectionState>()
                 .unwrap();
-            info!(
-                "[ROOM: {}] [UUID: {}] [CONNECTION STATE: {:#?}]",
-                room_name_copy,
-                uuid_copy,
-                connection.unwrap()
-            );
+            // info!(
+            //     "[ROOM: {}] [UUID: {}] [CONNECTION STATE: {:#?}]",
+            //     room_name_copy,
+            //     uuid_copy,
+            //     connection.unwrap()
+            // );
         });
 
         let room_name_copy = requst_room_name.to_string();
@@ -123,12 +123,12 @@ impl User {
                 .unwrap()
                 .get::<gstreamer_webrtc::WebRTCICEConnectionState>()
                 .unwrap();
-            info!(
-                "[ROOM: {}] [UUID: {}] [ICE CONNECTION STATE: {:#?}]",
-                room_name_copy,
-                uuid_copy,
-                ice_connection.unwrap()
-            );
+            // info!(
+            //     "[ROOM: {}] [UUID: {}] [ICE CONNECTION STATE: {:#?}]",
+            //     room_name_copy,
+            //     uuid_copy,
+            //     ice_connection.unwrap()
+            // );
         });
 
         let room_name_copy = requst_room_name.to_string();
@@ -139,12 +139,12 @@ impl User {
                 .unwrap()
                 .get::<gstreamer_webrtc::WebRTCICEGatheringState>()
                 .unwrap();
-            info!(
-                "[ROOM: {}] [UUID: {}] [GATHER CONNECTION STATE: {:#?}]",
-                room_name_copy,
-                uuid_copy,
-                gather_connection.unwrap()
-            );
+            // info!(
+            //     "[ROOM: {}] [UUID: {}] [GATHER CONNECTION STATE: {:#?}]",
+            //     room_name_copy,
+            //     uuid_copy,
+            //     gather_connection.unwrap()
+            // );
         });
 
         let room_name_copy = requst_room_name.to_string();
@@ -155,18 +155,14 @@ impl User {
                 .unwrap()
                 .get::<gstreamer_webrtc::WebRTCSignalingState>()
                 .unwrap();
-            info!(
-                "[ROOM: {}] [UUID: {}] [SIGNALLING STATE: {:#?}]",
-                room_name_copy,
-                uuid_copy,
-                signalling.unwrap()
-            );
+            // info!(
+            //     "[ROOM: {}] [UUID: {}] [SIGNALLING STATE: {:#?}]",
+            //     room_name_copy,
+            //     uuid_copy,
+            //     signalling.unwrap()
+            // );
         });
         Ok(user)
-    }
-
-    pub fn stop_fakeaudio(&self) {
-        let _ = self.pipeline.fakeaudio.set_state(gstreamer::State::Null);
     }
 
     pub fn downgrade_to_weak_reference(&self) -> UserWeak {
@@ -254,7 +250,9 @@ impl User {
         self.room_address.do_send(webrtc::WigglypuffWebRTC::new(
             &self.uuid,
             &self.room_name,
+            self.pipeline.role.clone(),
             message_websocket::MessageSocketType::ICECandidate {
+                uuid: self.uuid.to_string(), 
                 candidate: candidate.to_owned(),
                 sdp_mline_index: sdp_mline_index.to_owned(),
             },
@@ -290,7 +288,9 @@ impl User {
                 self.room_address.do_send(webrtc::WigglypuffWebRTC::new(
                     &self.uuid,
                     &self.room_name,
+                    self.pipeline.role.clone(),
                     message_websocket::MessageSocketType::SessionDescription {
+                        uuid: self.uuid.to_string(), 
                         types: "offer".to_string(),
                         sdp: offer.get_sdp().as_text().unwrap(),
                     },
