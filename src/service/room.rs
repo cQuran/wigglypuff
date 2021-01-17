@@ -159,16 +159,13 @@ impl Handler<webrtc::WigglypuffWebRTC> for Room {
         let (uuid_src, uuid_sink) = match webrtc.role {
             webrtc::Role::Producer {} => (webrtc.uuid.clone(), webrtc.uuid.clone()),
             webrtc::Role::Consumer {} => {
-                info!("INI CONSUMERRR");
                 let result: Vec<&str> = webrtc.uuid.split("_sink:").collect();
                 (result[0][4..].to_string(), result[1].to_string())
             }
         };
-        info!("OKKKKKKK {} {}", uuid_src, uuid_sink);
-
-        webrtc.uuid = uuid_sink;
+        webrtc.uuid = uuid_src;
         let message = serde_json::to_string(&webrtc).unwrap();
-        self.send_user(&uuid_src, &webrtc.room_name, &message);
+        self.send_user(&uuid_sink, &webrtc.room_name, &message);
     }
 }
 

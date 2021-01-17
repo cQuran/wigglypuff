@@ -280,7 +280,7 @@ impl Handler<webrtc::SessionDescription> for Channel {
         );
 
         if sdp.from_uuid != sdp.uuid {
-            let peer_key = format!("src:{}_sink:{}", sdp.from_uuid, sdp.uuid);
+            let peer_key = format!("src:{}_sink:{}", sdp.uuid, sdp.from_uuid);
             let peers = self.peers.lock().unwrap();
             if let Some(peer) = peers.get(&peer_key) {
                 peer.on_session_answer(sdp.sdp);
@@ -304,7 +304,7 @@ impl Handler<webrtc::ICECandidate> for Channel {
         );
 
         if ice.from_uuid != ice.uuid {
-            let peer_key = format!("src:{}_sink:{}", ice.from_uuid, ice.uuid);
+            let peer_key = format!("src:{}_sink:{}", ice.uuid, ice.from_uuid);
             let peers = self.peers.lock().unwrap();
             if let Some(peer) = peers.get(&peer_key) {
                 peer.on_ice_answer(ice.sdp_mline_index, ice.candidate);

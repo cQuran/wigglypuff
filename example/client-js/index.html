@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<!--
+  vim: set sts=2 sw=2 et :
+
+
+  Demo Javascript app for negotiating and streaming a sendrecv webrtc stream
+  with a GStreamer app. Runs only in passive mode, i.e., responds to offers
+  with answers, exchanges ICE candidates, and streams.
+
+  Author: Nirbheek Chauhan <nirbheek@centricular.com>
+-->
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <style>
+      .error { color: red; }
+    </style>
+    <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+    <script src="webrtc.js"></script>
+    <script>
+      window.onload = wigglypuffConnect;
+    </script>
+  </head>
+
+  <body>
+    <div><video id="stream" autoplay playsinline>Your browser doesn't support video</video></div>
+
+    <div><b>REST API ROOM USER/MASTER</b></div>
+    <div>
+      <div>UUID</div>
+      <div><textarea id="user" cols=40 rows=1>4d69dfd1-5146-442e-bf9c-06f8e28bf90b</textarea></div>
+      <div>Room Name</div>
+      <div><textarea id="join_room_name" cols=40 rows=1>ngaji-bareng</textarea></div>
+      <button onclick="onConnectClicked();">Join Room</button>
+      <button onclick="onConnectClicked();">Leave Room</button>
+    </div>
+    <br/>
+    
+    <div><b>WIGGLYPUFF ON MESSAGE</b></div>
+    <div><textarea id="constraints" cols=40 rows=20 disabled></textarea></div>
+    <div>
+      <button onclick="onICEClicked();">ICE Candidate</button>
+      <button onclick="onICEClicked();">Offer Correction</button>
+      <button onclick="onConnectClicked();">Mute User</button>
+    </div>
+
+    <div>Our id is <b id="peer-id">unknown</b></div>
+    <br/>
+  </body>
+</html>
