@@ -1,0 +1,41 @@
+version: 2
+jobs:
+  build:
+    machine: true
+    working_directory: ~/repo
+    steps:
+      - checkout
+
+      # build the application image
+      - run:
+          name: Build App
+          command: docker build -f ./docker/alpine/Dockerfile -t cquran.my.id:5000/wigglypuff .
+          no_output_timeout: 1h
+      - run:
+          name: Push App
+          command: docker push cquran.my.id:5000/wigglypuff
+  deploy:
+    machine:
+      enabled: true
+    steps:
+      - add_ssh_keys:
+          fingerprints:
+            - $fingerprint
+      - run:
+          name: Deploy App Over SSH
+          command: |
+            ssh $user@$hostname "./deployment/restart-wigglypuff.sh"
+workflows:
+  version: 2
+  build-and-deploy:
+    jobs:
+      - build:
+          filters:
+            branches:
+              only: main # only build on the main branch
+      - deploy:
+          requires:
+            - build # only deploy once build job has completed
+          filters:
+            branches:
+              only: main # only deploy on the main branch 
