@@ -210,7 +210,6 @@ impl Channel {
         fakeaudio.link(&webrtcbin).unwrap();
         webrtcbin.link(&tee).unwrap();
         tee.link(&fakesink).unwrap();
-        self.play_pipeline(&pipeline_gstreamer);
 
         webrtc::UserPipeline {
             fakeaudio,
@@ -252,8 +251,6 @@ impl Channel {
         webrtcbin.link(&tee).unwrap();
         tee.link(&fakesink).unwrap();
 
-        // audio_src_pad.remove_probe(audio_block);
-
         webrtc::UserPipeline {
             fakeaudio,
             webrtcbin,
@@ -269,8 +266,8 @@ impl Actor for Channel {
 }
 
 impl StreamHandler<gstreamer::Message> for Channel {
-    fn handle(&mut self, _message: gstreamer::Message, _: &mut Self::Context) {
-        // info!("MASUK {:#?}", message.view());
+    fn handle(&mut self, message: gstreamer::Message, _: &mut Self::Context) {
+        info!("MASUK {:#?}", message.view());
     }
 }
 
@@ -304,7 +301,7 @@ impl Handler<supervisor::RegisterUser> for Channel {
             peers.insert(peer_key, new_peer);
         }
         
-        for (uuid_src, user_src) in users.iter() {
+        for (uuid_src, _) in users.iter() {
             let peer_key = format!("src:{}_sink:{}", user.uuid, uuid_src);
             let user_pipeline = self.build_consumer(&peer_key, &user.uuid, &new_user.pipeline.tee);
             info!("SUDAH BIKIN PEER {}", peer_key);
@@ -317,9 +314,13 @@ impl Handler<supervisor::RegisterUser> for Channel {
             .unwrap();
             let mut peers = self.peers.lock().unwrap();
             peers.insert(peer_key, new_peer);
+
+            
         }
 
         users.insert(user.uuid, new_user);
+        let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
+        self.play_pipeline(&pipeline_gstreamer);
     }
 }
 
