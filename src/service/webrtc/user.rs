@@ -106,12 +106,12 @@ impl User {
                 .unwrap()
                 .get::<gstreamer_webrtc::WebRTCPeerConnectionState>()
                 .unwrap();
-            // info!(
-            //     "[ROOM: {}] [UUID: {}] [CONNECTION STATE: {:#?}]",
-            //     room_name_copy,
-            //     uuid_copy,
-            //     connection.unwrap()
-            // );
+            info!(
+                "[ROOM: {}] [UUID: {}] [CONNECTION STATE: {:#?}]",
+                room_name_copy,
+                uuid_copy,
+                connection.unwrap()
+            );
         });
 
         let room_name_copy = requst_room_name.to_string();
@@ -123,12 +123,12 @@ impl User {
                 .unwrap()
                 .get::<gstreamer_webrtc::WebRTCICEConnectionState>()
                 .unwrap();
-            // info!(
-            //     "[ROOM: {}] [UUID: {}] [ICE CONNECTION STATE: {:#?}]",
-            //     room_name_copy,
-            //     uuid_copy,
-            //     ice_connection.unwrap()
-            // );
+            info!(
+                "[ROOM: {}] [UUID: {}] [ICE CONNECTION STATE: {:#?}]",
+                room_name_copy,
+                uuid_copy,
+                ice_connection.unwrap()
+            );
         });
 
         let room_name_copy = requst_room_name.to_string();
@@ -139,12 +139,12 @@ impl User {
                 .unwrap()
                 .get::<gstreamer_webrtc::WebRTCICEGatheringState>()
                 .unwrap();
-            // info!(
-            //     "[ROOM: {}] [UUID: {}] [GATHER CONNECTION STATE: {:#?}]",
-            //     room_name_copy,
-            //     uuid_copy,
-            //     gather_connection.unwrap()
-            // );
+            info!(
+                "[ROOM: {}] [UUID: {}] [GATHER CONNECTION STATE: {:#?}]",
+                room_name_copy,
+                uuid_copy,
+                gather_connection.unwrap()
+            );
         });
 
         let room_name_copy = requst_room_name.to_string();
@@ -155,12 +155,12 @@ impl User {
                 .unwrap()
                 .get::<gstreamer_webrtc::WebRTCSignalingState>()
                 .unwrap();
-            // info!(
-            //     "[ROOM: {}] [UUID: {}] [SIGNALLING STATE: {:#?}]",
-            //     room_name_copy,
-            //     uuid_copy,
-            //     signalling.unwrap()
-            // );
+            info!(
+                "[ROOM: {}] [UUID: {}] [SIGNALLING STATE: {:#?}]",
+                room_name_copy,
+                uuid_copy,
+                signalling.unwrap()
+            );
         });
         Ok(user)
     }
@@ -239,7 +239,6 @@ impl User {
                 }
             }
         }
-        info!("DONEEEE");
 
         webrtcbin
             .emit("create-offer", &[&None::<gstreamer::Structure>, &promise])

@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use gstreamer;
-use gstreamer::{ElementExt, ElementExtManual, GstBinExt, PadExtManual};
+use gstreamer::{ElementExt, ElementExtManual, GstBinExt};
 
 pub struct Channel {
     users: Arc<Mutex<BTreeMap<String, user::User>>>,
@@ -34,6 +34,7 @@ impl Channel {
         &self,
         pipeline_gstreamer: &webrtc::GstreamerPipeline,
         uuid: &str,
+        role: &webrtc::Role,
     ) -> gstreamer::Bin {
         let fakeaudio = gstreamer::parse_bin_from_description(
             &format!(
@@ -43,6 +44,11 @@ impl Channel {
             false,
         )
         .unwrap();
+        if role == &webrtc::Role::Consumer {
+            pipeline_gstreamer.pipeline.add(&fakeaudio).unwrap();
+            fakeaudio.sync_state_with_parent().unwrap();
+        }
+
         let opusenc = fakeaudio.get_by_name(&format!("{}_opusenc", uuid)).unwrap();
 
         let opusenc_pad = gstreamer::GhostPad::with_target(
@@ -52,7 +58,10 @@ impl Channel {
         .unwrap();
 
         fakeaudio.add_pad(&opusenc_pad).unwrap();
-        pipeline_gstreamer.pipeline.add(&fakeaudio).unwrap();
+
+        if role == &webrtc::Role::Producer {
+            pipeline_gstreamer.pipeline.add(&fakeaudio).unwrap();
+        }
 
         fakeaudio
     }
@@ -61,12 +70,17 @@ impl Channel {
         &self,
         pipeline_gstreamer: &webrtc::GstreamerPipeline,
         uuid: &str,
+        role: &webrtc::Role,
     ) -> gstreamer::Bin {
         let user = gstreamer::parse_bin_from_description(&format!(
             "rtpopuspay name={uuid}_rtpopuspay pt=97 ! webrtcbin name={uuid}_webrtcbin bundle-policy=max-bundle stun-server={stun_server} ! rtpopusdepay name={uuid}_rtpopusdepay",
             uuid = uuid,
             stun_server = constants::STUN_SERVER
         ), false).unwrap();
+        if role == &webrtc::Role::Consumer {
+            pipeline_gstreamer.pipeline.add(&user).unwrap();
+            user.sync_state_with_parent().unwrap();
+        }
 
         let rtpopuspay = user
             .get_by_name(&format!("{}_rtpopuspay", uuid))
@@ -90,7 +104,10 @@ impl Channel {
         )
         .unwrap();
         user.add_pad(&rtpopusdepay_src_pad).unwrap();
-        pipeline_gstreamer.pipeline.add(&user).unwrap();
+
+        if role == &webrtc::Role::Producer {
+            pipeline_gstreamer.pipeline.add(&user).unwrap();
+        }
 
         user
     }
@@ -99,12 +116,18 @@ impl Channel {
         &self,
         pipeline_gstreamer: &webrtc::GstreamerPipeline,
         uuid: &str,
+        role: &webrtc::Role,
     ) -> gstreamer::Bin {
         let fakesinkbin = gstreamer::parse_bin_from_description(
             &format!("fakesink name={uuid}_fakesink sync=false", uuid = uuid),
             false,
         )
         .unwrap();
+        if role == &webrtc::Role::Consumer {
+            pipeline_gstreamer.pipeline.add(&fakesinkbin).unwrap();
+            fakesinkbin.sync_state_with_parent().unwrap();
+        }
+
         let fakesink = fakesinkbin
             .get_by_name(&format!("{}_fakesink", uuid))
             .unwrap();
@@ -115,7 +138,10 @@ impl Channel {
         )
         .unwrap();
         fakesinkbin.add_pad(&fakesink_pad).unwrap();
-        pipeline_gstreamer.pipeline.add(&fakesinkbin).unwrap();
+
+        if role == &webrtc::Role::Producer {
+            pipeline_gstreamer.pipeline.add(&fakesinkbin).unwrap();
+        }
 
         fakesinkbin
     }
@@ -124,12 +150,18 @@ impl Channel {
         &self,
         pipeline_gstreamer: &webrtc::GstreamerPipeline,
         uuid: &str,
+        role: &webrtc::Role,
     ) -> gstreamer::Bin {
         let teebin = gstreamer::parse_bin_from_description(
             &format!("tee name={uuid}_tee", uuid = uuid),
             false,
         )
         .unwrap();
+        if role == &webrtc::Role::Consumer {
+            pipeline_gstreamer.pipeline.add(&teebin).unwrap();
+            teebin.sync_state_with_parent().unwrap();
+        }
+
         let tee = teebin.get_by_name(&format!("{}_tee", uuid)).unwrap();
 
         let teesink_pad = gstreamer::GhostPad::with_target(
@@ -145,7 +177,10 @@ impl Channel {
         )
         .unwrap();
         teebin.add_pad(&teesrc_pad).unwrap();
-        pipeline_gstreamer.pipeline.add(&teebin).unwrap();
+
+        if role == &webrtc::Role::Producer {
+            pipeline_gstreamer.pipeline.add(&teebin).unwrap();
+        }
 
         teebin
     }
@@ -168,10 +203,10 @@ impl Channel {
         let role = webrtc::Role::Producer;
 
         let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
-        let fakeaudio = self.create_fakeaudio(&pipeline_gstreamer, &uuid);
-        let webrtcbin = self.create_webrtcbin(&pipeline_gstreamer, &uuid);
-        let tee = self.create_teeadapter(&pipeline_gstreamer, &uuid);
-        let fakesink = self.create_fakesink(&pipeline_gstreamer, &uuid);
+        let fakeaudio = self.create_fakeaudio(&pipeline_gstreamer, &uuid, &role);
+        let webrtcbin = self.create_webrtcbin(&pipeline_gstreamer, &uuid, &role);
+        let tee = self.create_teeadapter(&pipeline_gstreamer, &uuid, &role);
+        let fakesink = self.create_fakesink(&pipeline_gstreamer, &uuid, &role);
         fakeaudio.link(&webrtcbin).unwrap();
         webrtcbin.link(&tee).unwrap();
         tee.link(&fakesink).unwrap();
@@ -195,27 +230,29 @@ impl Channel {
         let role = webrtc::Role::Consumer;
 
         let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
-        let fakeaudio = self.create_fakeaudio(&pipeline_gstreamer, &peer_key);
-        let webrtcbin = self.create_webrtcbin(&pipeline_gstreamer, &peer_key);
-        let tee = self.create_teeadapter(&pipeline_gstreamer, &peer_key);
-        let fakesink = self.create_fakesink(&pipeline_gstreamer, &peer_key);
+        let fakeaudio = self.create_fakeaudio(&pipeline_gstreamer, &peer_key, &role);
+        let webrtcbin = self.create_webrtcbin(&pipeline_gstreamer, &peer_key, &role);
+        let tee = self.create_teeadapter(&pipeline_gstreamer, &peer_key, &role);
+        let fakesink = self.create_fakesink(&pipeline_gstreamer, &peer_key, &role);
 
         let tee_src = teebin_from_uuid_src
             .get_by_name(&format!("{}_tee", uuid_src))
             .unwrap();
 
+        let audio_src_pad = tee_src.get_request_pad("src_%u").unwrap();
+
         let teesrc_pad = gstreamer::GhostPad::with_target(
             Some(&format!("{}_tee_src", peer_key)),
-            &tee_src.get_request_pad("src_%u").unwrap(),
+            &audio_src_pad,
         )
         .unwrap();
         teebin_from_uuid_src.add_pad(&teesrc_pad).unwrap();
 
         teebin_from_uuid_src.link(&webrtcbin).unwrap();
-        // fakeaudio.link(&webrtcbin).unwrap();
         webrtcbin.link(&tee).unwrap();
         tee.link(&fakesink).unwrap();
-        self.play_pipeline(&pipeline_gstreamer);
+
+        // audio_src_pad.remove_probe(audio_block);
 
         webrtc::UserPipeline {
             fakeaudio,
@@ -266,6 +303,22 @@ impl Handler<supervisor::RegisterUser> for Channel {
             let mut peers = self.peers.lock().unwrap();
             peers.insert(peer_key, new_peer);
         }
+        
+        for (uuid_src, user_src) in users.iter() {
+            let peer_key = format!("src:{}_sink:{}", user.uuid, uuid_src);
+            let user_pipeline = self.build_consumer(&peer_key, &user.uuid, &new_user.pipeline.tee);
+            info!("SUDAH BIKIN PEER {}", peer_key);
+            let new_peer = user::User::new(
+                user.room_address.clone(),
+                &user.room_name,
+                &peer_key,
+                user_pipeline,
+            )
+            .unwrap();
+            let mut peers = self.peers.lock().unwrap();
+            peers.insert(peer_key, new_peer);
+        }
+
         users.insert(user.uuid, new_user);
     }
 }

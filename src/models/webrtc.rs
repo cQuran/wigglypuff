@@ -2,7 +2,7 @@ use crate::models::{message_websocket, webrtc};
 use actix_derive::Message;
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, PartialEq)]
 pub enum Role {
     Consumer,
     Producer,
