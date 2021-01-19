@@ -302,26 +302,25 @@ impl Handler<supervisor::RegisterUser> for Channel {
         }
         info!("DONEEEEEEEEEEEEEEEEEEEEEEEEEEEE");
 
+        // for (uuid_src, _) in users.iter() {
+        //     let peer_key = format!("src:{}_sink:{}", user.uuid, uuid_src);
+        //     let user_pipeline = self.build_consumer(&peer_key, &user.uuid, &new_user.pipeline.tee);
+        //     info!("SUDAH BIKIN PEER {}", peer_key);
+        //     let new_peer = user::User::new(
+        //         user.room_address.clone(),
+        //         &user.room_name,
+        //         &peer_key,
+        //         user_pipeline,
+        //     )
+        //     .unwrap();
+        //     let mut peers = self.peers.lock().unwrap();
+        //     peers.insert(peer_key, new_peer);
+        // }
+
+        users.insert(user.uuid, new_user);
 
         let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
         self.play_pipeline(&pipeline_gstreamer);
-
-        for (uuid_src, _) in users.iter() {
-            let peer_key = format!("src:{}_sink:{}", user.uuid, uuid_src);
-            let user_pipeline = self.build_consumer(&peer_key, &user.uuid, &new_user.pipeline.tee);
-            info!("SUDAH BIKIN PEER {}", peer_key);
-            let new_peer = user::User::new(
-                user.room_address.clone(),
-                &user.room_name,
-                &peer_key,
-                user_pipeline,
-            )
-            .unwrap();
-            let mut peers = self.peers.lock().unwrap();
-            peers.insert(peer_key, new_peer);
-        }
-
-        users.insert(user.uuid, new_user);
     }
 }
 
