@@ -302,6 +302,10 @@ impl Handler<supervisor::RegisterUser> for Channel {
         }
         info!("DONEEEEEEEEEEEEEEEEEEEEEEEEEEEE");
 
+
+        let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
+        self.play_pipeline(&pipeline_gstreamer);
+
         for (uuid_src, _) in users.iter() {
             let peer_key = format!("src:{}_sink:{}", user.uuid, uuid_src);
             let user_pipeline = self.build_consumer(&peer_key, &user.uuid, &new_user.pipeline.tee);
@@ -318,9 +322,6 @@ impl Handler<supervisor::RegisterUser> for Channel {
         }
 
         users.insert(user.uuid, new_user);
-
-        let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
-        self.play_pipeline(&pipeline_gstreamer);
     }
 }
 
