@@ -300,25 +300,25 @@ impl Handler<supervisor::RegisterUser> for Channel {
             let mut peers = self.peers.lock().unwrap();
             peers.insert(peer_key, new_peer);
         }
-        
-        for (uuid_src, _) in users.iter() {
-            let peer_key = format!("src:{}_sink:{}", user.uuid, uuid_src);
-            let user_pipeline = self.build_consumer(&peer_key, &user.uuid, &new_user.pipeline.tee);
-            info!("SUDAH BIKIN PEER {}", peer_key);
-            let new_peer = user::User::new(
-                user.room_address.clone(),
-                &user.room_name,
-                &peer_key,
-                user_pipeline,
-            )
-            .unwrap();
-            let mut peers = self.peers.lock().unwrap();
-            peers.insert(peer_key, new_peer);
+        info!("DONEEEEEEEEEEEEEEEEEEEEEEEEEEEE");
 
-            
-        }
+        // for (uuid_src, _) in users.iter() {
+        //     let peer_key = format!("src:{}_sink:{}", user.uuid, uuid_src);
+        //     let user_pipeline = self.build_consumer(&peer_key, &user.uuid, &new_user.pipeline.tee);
+        //     info!("SUDAH BIKIN PEER {}", peer_key);
+        //     let new_peer = user::User::new(
+        //         user.room_address.clone(),
+        //         &user.room_name,
+        //         &peer_key,
+        //         user_pipeline,
+        //     )
+        //     .unwrap();
+        //     let mut peers = self.peers.lock().unwrap();
+        //     peers.insert(peer_key, new_peer);
+        // }
 
         users.insert(user.uuid, new_user);
+
         let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
         self.play_pipeline(&pipeline_gstreamer);
     }
@@ -385,5 +385,67 @@ impl Handler<supervisor::DeleteUser> for Channel {
         // if let Some(user) = users.get(&user.uuid) {
         //     let _ = user.stop_fakeaudio();
         // }
+    }
+}
+
+impl Handler<webrtc::CheckState> for Channel {
+    type Result = ();
+
+    fn handle(&mut self, _user: webrtc::CheckState, _: &mut actix::Context<Self>) {
+        info!("MASUKK");
+        let users = self.users.lock().unwrap();
+        for (uuid, user) in users.iter() {
+            info!("UUID {}", uuid);
+            info!(
+                "[UUID {}] [FAKEAUDIO {:?}]",
+                uuid,
+                user.pipeline
+                    .fakeaudio
+                    .get_state(gstreamer::CLOCK_TIME_NONE)
+            );
+
+            info!(
+                "[UUID {}] [WEBRTCBIN {:?}]",
+                uuid,
+                user.pipeline
+                    .webrtcbin
+                    .get_state(gstreamer::CLOCK_TIME_NONE)
+            );
+            info!(
+                "[UUID {}] [TEE {:?}]",
+                uuid,
+                user.pipeline.tee.get_state(gstreamer::CLOCK_TIME_NONE)
+            );
+            info!(
+                "[UUID {}] [FAKESINK {:?}]",
+                uuid,
+                user.pipeline.fakesink.get_state(gstreamer::CLOCK_TIME_NONE)
+            );
+        }
+
+        let peers = self.peers.lock().unwrap();
+        for (uuid, user) in peers.iter() {
+            info!("UUID {}", uuid);
+            info!(
+                "[UUID {}] [FAKEAUDIO {:?}]",
+                uuid,
+                user.pipeline
+                    .fakeaudio
+                    .get_state(gstreamer::CLOCK_TIME_NONE)
+            );
+
+            info!(
+                "[UUID {}] [WEBRTCBIN {:?}]",
+                uuid,
+                user.pipeline
+                    .webrtcbin
+                    .get_state(gstreamer::CLOCK_TIME_NONE)
+            );
+            info!(
+                "[UUID {}] [TEE {:?}]",
+                uuid,
+                user.pipeline.tee.get_state(gstreamer::CLOCK_TIME_NONE)
+            );
+        }
     }
 }

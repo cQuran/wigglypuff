@@ -86,3 +86,14 @@ impl Handler<supervisor::DeleteUser> for Supervisor {
         }
     }
 }
+
+impl Handler<webrtc::CheckState> for Supervisor {
+    type Result = ();
+
+    fn handle(&mut self, check_state: webrtc::CheckState, _: &mut Context<Self>) {
+        info!("[ROOM: {}]", check_state.name);
+        if let Some(channel) = self.channels.get(&check_state.name) {
+            channel.do_send(check_state);
+        }
+    }
+}

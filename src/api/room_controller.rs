@@ -1,5 +1,6 @@
 use crate::constants;
 use crate::models::room as models_room;
+use crate::models::webrtc as models_webrtc;
 use crate::service::room as service_room;
 use crate::models::supervisor as supervisor;
 use crate::service::{session, webrtc};
@@ -18,6 +19,21 @@ pub async fn create(
     room_address.get_ref().do_send(models_room::CreateRoom {
         name: request.name.to_owned(),
         master_uuid: request.master_uuid.to_owned(),
+    });
+    Ok(HttpResponse::Ok().json(
+        response::ResponseBody::new(
+            constants::MESSAGE_OK, 
+            constants::MESSAGE_ROOM_CREATED
+        )
+    ))
+}
+
+pub async fn check_state(
+    request: web::Json<models_webrtc::CheckState>,
+    supervisor_webrtc_address: web::Data<Addr<webrtc::supervisor::Supervisor>>,
+) -> Result<HttpResponse, Error> {
+    supervisor_webrtc_address.get_ref().do_send(models_webrtc::CheckState {
+        name: request.name.to_owned()
     });
     Ok(HttpResponse::Ok().json(
         response::ResponseBody::new(
