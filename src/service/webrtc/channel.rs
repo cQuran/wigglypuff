@@ -2,7 +2,7 @@ use crate::constants;
 use crate::models::supervisor;
 use crate::models::webrtc;
 use crate::service::webrtc::user;
-use actix::{Actor, Addr, Handler, StreamHandler};
+use actix::{Actor, Addr, Handler};
 use log::info;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -265,12 +265,6 @@ impl Actor for Channel {
     type Context = actix::Context<Self>;
 }
 
-impl StreamHandler<gstreamer::Message> for Channel {
-    fn handle(&mut self, message: gstreamer::Message, _: &mut Self::Context) {
-        info!("MASUK {:#?}", message.view());
-    }
-}
-
 impl Handler<supervisor::RegisterUser> for Channel {
     type Result = ();
 
@@ -379,5 +373,3 @@ impl Handler<supervisor::DeleteUser> for Channel {
         );
     }
 }
-
-
