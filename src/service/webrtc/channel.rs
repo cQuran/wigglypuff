@@ -297,24 +297,24 @@ impl Handler<supervisor::RegisterUser> for Channel {
                 user_pipeline,
             )
             .unwrap();
+
+            let peer_key_consumer = format!("src:{}_sink:{}", user.uuid, uuid_src);
+            let user_pipeline = self.build_consumer(&peer_key_consumer, &user.uuid, &new_user.pipeline.tee);
+            info!("SUDAH BIKIN PEER {}", peer_key_consumer);
+            let new_peer_consumer = user::User::new(
+                user.room_address.clone(),
+                &user.room_name,
+                &peer_key_consumer,
+                user_pipeline,
+            )
+            .unwrap();
             let mut peers = self.peers.lock().unwrap();
             peers.insert(peer_key, new_peer);
+            peers.insert(peer_key_consumer, new_peer_consumer);
         }
-        info!("DONEEEEEEEEEEEEEEEEEEEEEEEEEEEE");
 
         // for (uuid_src, _) in users.iter() {
-        //     let peer_key = format!("src:{}_sink:{}", user.uuid, uuid_src);
-        //     let user_pipeline = self.build_consumer(&peer_key, &user.uuid, &new_user.pipeline.tee);
-        //     info!("SUDAH BIKIN PEER {}", peer_key);
-        //     let new_peer = user::User::new(
-        //         user.room_address.clone(),
-        //         &user.room_name,
-        //         &peer_key,
-        //         user_pipeline,
-        //     )
-        //     .unwrap();
-        //     let mut peers = self.peers.lock().unwrap();
-        //     peers.insert(peer_key, new_peer);
+        //     
         // }
 
         users.insert(user.uuid, new_user);
@@ -392,7 +392,6 @@ impl Handler<webrtc::CheckState> for Channel {
     type Result = ();
 
     fn handle(&mut self, _user: webrtc::CheckState, _: &mut actix::Context<Self>) {
-        info!("MASUKK");
         let users = self.users.lock().unwrap();
         for (uuid, user) in users.iter() {
             info!("UUID {}", uuid);
