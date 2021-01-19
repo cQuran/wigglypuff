@@ -29,12 +29,10 @@ impl Handler<supervisor::RegisterUser> for Supervisor {
         let room_name = user.room_name.clone();
         if !self.channels.contains_key(&room_name) {
             let channel = channel::Channel::new(&room_name.clone());
-
             channel.do_send(user);
             self.channels.insert(room_name.clone(), channel);
         } else {
             if let Some(channel) = self.channels.get(&user.room_name) {
-                info!("CONTAINTS");
                 channel.do_send(user);
             }
         }
@@ -83,17 +81,6 @@ impl Handler<supervisor::DeleteUser> for Supervisor {
         );
         if let Some(channel) = self.channels.get(&user.room_name) {
             channel.do_send(user);
-        }
-    }
-}
-
-impl Handler<webrtc::CheckState> for Supervisor {
-    type Result = ();
-
-    fn handle(&mut self, check_state: webrtc::CheckState, _: &mut Context<Self>) {
-        info!("[ROOM: {}]", check_state.name);
-        if let Some(channel) = self.channels.get(&check_state.name) {
-            channel.do_send(check_state);
         }
     }
 }

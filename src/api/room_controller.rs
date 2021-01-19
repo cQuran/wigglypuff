@@ -28,21 +28,6 @@ pub async fn create(
     ))
 }
 
-pub async fn check_state(
-    request: web::Json<models_webrtc::CheckState>,
-    supervisor_webrtc_address: web::Data<Addr<webrtc::supervisor::Supervisor>>,
-) -> Result<HttpResponse, Error> {
-    supervisor_webrtc_address.get_ref().do_send(models_webrtc::CheckState {
-        name: request.name.to_owned()
-    });
-    Ok(HttpResponse::Ok().json(
-        response::ResponseBody::new(
-            constants::MESSAGE_OK, 
-            constants::MESSAGE_ROOM_CREATED
-        )
-    ))
-}
-
 pub async fn get_all_room(
     room_address: web::Data<Addr<service_room::Room>>
 ) -> Result<HttpResponse, Error> {
@@ -61,7 +46,7 @@ pub async fn join(
     parameter: web::Path<(String, String)>,
     request: HttpRequest,
     stream: web::Payload,
-    supervisor_webrtc_address: web::Data<Addr<webrtc::supervisor::Supervisor>>,
+    webrtc_address: web::Data<Addr<webrtc::supervisor::Supervisor>>,
     room_address: web::Data<Addr<service_room::Room>>,
 ) -> Result<HttpResponse, Error> {
     let master_uuid = room_address.get_ref().send(models_room::GetMaster {
@@ -69,7 +54,7 @@ pub async fn join(
     } ).await.unwrap();
 
     if &master_uuid != "NAN" {
-        supervisor_webrtc_address.get_ref().send(supervisor::RegisterUser {
+        webrtc_address.get_ref().send(supervisor::RegisterUser {
             room_address: room_address.get_ref().clone(),
             room_name: parameter.0.0.clone(),
             uuid: parameter.0.1.to_owned()
@@ -81,7 +66,7 @@ pub async fn join(
                 uuid: parameter.0.1.to_owned(),
                 room_address: room_address.get_ref().clone(),
                 master_uuid: master_uuid,
-                webrtc_supervisor_address: supervisor_webrtc_address.get_ref().clone(),
+                webrtc_address: webrtc_address.get_ref().clone(),
             },
             &request,
             stream,
@@ -103,7 +88,7 @@ pub async fn delete_room(
     request: web::Json<models_room::DeleteRoom>,
     room_address: web::Data<Addr<service_room::Room>>,
 ) -> Result<HttpResponse, Error> {
-    let _ = room_address
+    room_address
         .get_ref()
         .do_send(models_room::DeleteRoom {
             name: request.name.to_owned(),
@@ -119,11 +104,11 @@ pub async fn delete_room(
 
 pub async fn kick_user(
     request: web::Json<supervisor::DeleteUser>,
-    supervisor_webrtc_address: web::Data<Addr<webrtc::supervisor::Supervisor>>,
+    webrtc_address: web::Data<Addr<webrtc::supervisor::Supervisor>>,
     room_address: web::Data<Addr<service_room::Room>>,
 ) -> Result<HttpResponse, Error> {
 
-    let _ = supervisor_webrtc_address
+    let _ = webrtc_address
         .get_ref()
         .do_send(supervisor::DeleteUser {
             uuid: request.uuid.to_owned(),

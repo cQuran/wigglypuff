@@ -1,6 +1,6 @@
+use crate::models::webrtc;
 use crate::models::{message_websocket, room};
 use crate::service::session;
-use crate::models::webrtc;
 use log::info;
 
 use serde_json;
@@ -37,9 +37,9 @@ pub fn send_to_client_webrtc(
         message_websocket::MessageSocketType::ICECandidate {
             candidate,
             sdp_mline_index,
-            uuid
+            uuid,
         } => {
-            context.webrtc_supervisor_address.do_send(webrtc::ICECandidate {
+            context.webrtc_address.do_send(webrtc::ICECandidate {
                 room_name: context.room_name.clone(),
                 from_uuid: context.uuid.clone(),
                 uuid: uuid.to_string(),
@@ -48,7 +48,7 @@ pub fn send_to_client_webrtc(
             });
         }
         message_websocket::MessageSocketType::SessionDescription { types, sdp, uuid } => {
-            context.webrtc_supervisor_address.do_send(webrtc::SessionDescription {
+            context.webrtc_address.do_send(webrtc::SessionDescription {
                 room_name: context.room_name.clone(),
                 from_uuid: context.uuid.clone(),
                 uuid: uuid.to_string(),

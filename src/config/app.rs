@@ -16,15 +16,6 @@ pub fn config_services(config: &mut web::ServiceConfig) {
                         )),
                 )
                 .service(
-                    web::scope("/check_state").service(
-                        web::resource("").route(
-                            web::post()
-                                .guard(guard::Header("content-type", "application/json"))
-                                .to(room_controller::check_state),
-                        ),
-                    ),
-                )
-                .service(
                     web::scope("/user/kick").service(
                         web::resource("").route(
                             web::post()

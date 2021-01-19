@@ -44,14 +44,6 @@ pub struct SessionDescription {
     pub sdp: String,
 }
 
-
-
-#[derive(Message, Serialize, Deserialize)]
-#[rtype(result = "()")]
-pub struct CheckState {
-    pub name: String,
-}
-
 #[derive(Message, Serialize, Deserialize)]
 #[rtype(result = "()")]
 pub struct WigglypuffWebRTC {

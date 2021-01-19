@@ -13,7 +13,7 @@ pub struct Session {
     pub uuid: String,
     pub room_address: Addr<service::room::Room>,
     pub master_uuid: String,
-    pub webrtc_supervisor_address: Addr<webrtc::supervisor::Supervisor>,
+    pub webrtc_address: Addr<webrtc::supervisor::Supervisor>,
 }
 
 impl Actor for Session {
@@ -35,12 +35,10 @@ impl Actor for Session {
         })
         .unwrap();
 
-        let _ = self
-            .webrtc_supervisor_address
-            .do_send(models::supervisor::DeleteUser {
-                uuid: self.uuid.clone(),
-                room_name: self.room_name.clone(),
-            });
+        self.webrtc_address.do_send(models::supervisor::DeleteUser {
+            uuid: self.uuid.clone(),
+            room_name: self.room_name.clone(),
+        });
 
         self.room_address.do_send(models::room::Broadcast {
             uuid: self.uuid.to_owned(),
