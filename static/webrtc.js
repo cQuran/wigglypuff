@@ -117,6 +117,7 @@ function onWigglypuffMessage(event) {
     if (message.action) {
         console.log("ADAAA", message);
         if (message.action === "NewUser") {
+            wigglypuffConnection.send(JSON.stringify({ uuid: message.uuid, action: "RequestPair" }));
             let connection = new Connection(message.uuid, rtcConfiguration, wigglypuffConnection);
             connection.createRTCConnection();
             connections.push(connection);

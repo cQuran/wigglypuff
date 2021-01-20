@@ -264,18 +264,22 @@ impl Channel {
 impl Actor for Channel {
     type Context = actix::Context<Self>;
 }
-
-impl Handler<supervisor::RegisterUser> for Channel {
+impl Handler<webrtc::RequestPair> for Channel {
     type Result = ();
 
-    fn handle(&mut self, user: supervisor::RegisterUser, _context: &mut actix::Context<Self>) {
-        let mut users = self.users.lock().unwrap();
+    fn handle(&mut self, user: webrtc::RequestPair, _: &mut actix::Context<Self>) {
+        info!(
+            "[ROOM: {}] [UUID: {}] [TARGET: {}] [GET PAIR REQUEST FROM CHANNEL]",
+            user.room_name, user.from_uuid, user.uuid
+        );
+        let users = self.users.lock().unwrap();
 
-        for (uuid_src, user_src) in users.iter() {
-            let peer_key = format!("src:{}_sink:{}", uuid_src, user.uuid);
-            let user_pipeline = self.build_consumer(&peer_key, uuid_src, &user_src.pipeline.tee);
+        if let Some(user_sink) = users.get(&user.from_uuid) {
+            let peer_key = format!("src:{}_sink:{}", user.uuid, user.from_uuid);
+            let user_pipeline =
+                self.build_consumer(&peer_key, &user.from_uuid, &user_sink.pipeline.tee);
             let new_peer = user::User::new(
-                user.room_address.clone(),
+                user_sink.room_address.clone(),
                 &user.room_name,
                 &peer_key,
                 user_pipeline,
@@ -284,7 +288,28 @@ impl Handler<supervisor::RegisterUser> for Channel {
             let mut peers = self.peers.lock().unwrap();
             peers.insert(peer_key, new_peer);
         }
+        
+        if let Some(user_sink) = users.get(&user.uuid) {
+            let peer_key = format!("src:{}_sink:{}", user.from_uuid, user.uuid);
+            let user_pipeline =
+                self.build_consumer(&peer_key, &user.uuid, &user_sink.pipeline.tee);
+            let new_peer = user::User::new(
+                user_sink.room_address.clone(),
+                &user.room_name,
+                &peer_key,
+                user_pipeline,
+            )
+            .unwrap();
+            let mut peers = self.peers.lock().unwrap();
+            peers.insert(peer_key, new_peer);
+        }
+    }
+}
+impl Handler<supervisor::RegisterUser> for Channel {
+    type Result = ();
 
+    fn handle(&mut self, user: supervisor::RegisterUser, _context: &mut actix::Context<Self>) {
+        let mut users = self.users.lock().unwrap();
 
         let user_pipeline = self.build_producer(&user.uuid);
         let new_user = user::User::new(
@@ -294,21 +319,6 @@ impl Handler<supervisor::RegisterUser> for Channel {
             user_pipeline,
         )
         .unwrap();
-        
-        for (uuid_src, _) in users.iter() {
-            let peer_key = format!("src:{}_sink:{}", user.uuid, uuid_src);
-            let user_pipeline = self.build_consumer(&peer_key, &user.uuid, &new_user.pipeline.tee);
-            let new_peer = user::User::new(
-                user.room_address.clone(),
-                &user.room_name,
-                &peer_key,
-                user_pipeline,
-            )
-            .unwrap();
-            let mut peers = self.peers.lock().unwrap();
-            peers.insert(peer_key, new_peer);
-        }
-
         users.insert(user.uuid, new_user);
 
         let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();

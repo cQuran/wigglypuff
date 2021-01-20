@@ -44,6 +44,14 @@ pub struct SessionDescription {
     pub sdp: String,
 }
 
+#[derive(Message, Serialize)]
+#[rtype(result = "()")]
+pub struct RequestPair {
+    pub room_name: String,
+    pub from_uuid: String,
+    pub uuid: String,
+}
+
 #[derive(Message, Serialize, Deserialize)]
 #[rtype(result = "()")]
 pub struct WigglypuffWebRTC {

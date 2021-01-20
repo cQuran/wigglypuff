@@ -103,6 +103,13 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Session {
                         MessageSocketType::SessionDescription { .. } => {
                             message_websocket::send_to_client_webrtc(self, &message);
                         }
+                        MessageSocketType::RequestPair { .. } => {
+                            message_websocket::send_to_client_webrtc(self, &message);
+                        }
+                        _ => {
+                            context.text(constants::MESSAGE_FORBIDDEN_AUTHZ.to_string());
+                            context.stop();
+                        }
                     },
                     _ => {
                         context.text(constants::MESSAGE_FORBIDDEN_AUTHZ.to_string());

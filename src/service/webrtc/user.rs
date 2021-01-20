@@ -24,7 +24,8 @@ pub struct UserInner {
     pub room_address: Addr<service_room::Room>,
     pub room_name: String,
     pub uuid: String,
-    pub pipeline: webrtc::UserPipeline,
+    pub status: String,
+    pub pipeline: webrtc::UserPipeline
 }
 
 #[derive(Clone)]
@@ -61,10 +62,12 @@ impl User {
 
         let uuid = request_uuid.to_string();
         let room_name = requst_room_name.to_string();
+        let status = "ready".to_string();
         let user = User(Arc::new(UserInner {
             room_address,
             room_name,
             uuid,
+            status,
             pipeline,
         }));
 
@@ -100,6 +103,8 @@ impl User {
 
         let room_name_copy = requst_room_name.to_string();
         let uuid_copy = request_uuid.to_string();
+
+        let user_clone = user.downgrade_to_weak_reference();
         webrtcbin.connect_notify(Some("connection-state"), move |webrtcbin, _| {
             let connection = webrtcbin
                 .get_property("connection-state")
@@ -112,11 +117,26 @@ impl User {
                 uuid_copy,
                 connection.unwrap()
             );
+            if connection.unwrap() == gstreamer_webrtc::WebRTCPeerConnectionState::Connected {
+                let user = upgrade_app_weak_reference!(user_clone);
+                match user.pipeline.role {
+                    webrtc::Role::Consumer {} => {
+                        info!("INI CONSUMER");
+                    }
+                    webrtc::Role::Producer {} => {
+                        user.room_address.do_send(webrtc::WigglypuffWebRTC::new(
+                            &uuid_copy,
+                            &room_name_copy,
+                            user.pipeline.role.clone(),
+                            message_websocket::MessageSocketType::WebRTCConnectionState,
+                        ));
+                    }
+                };
+            }
         });
 
         let room_name_copy = requst_room_name.to_string();
         let uuid_copy = request_uuid.to_string();
-
         webrtcbin.connect_notify(Some("ice-connection-state"), move |webrtcbin, _| {
             let ice_connection = webrtcbin
                 .get_property("ice-connection-state")
@@ -251,7 +271,7 @@ impl User {
             &self.room_name,
             self.pipeline.role.clone(),
             message_websocket::MessageSocketType::ICECandidate {
-                uuid: self.uuid.to_string(), 
+                uuid: self.uuid.to_string(),
                 candidate: candidate.to_owned(),
                 sdp_mline_index: sdp_mline_index.to_owned(),
             },
@@ -289,7 +309,7 @@ impl User {
                     &self.room_name,
                     self.pipeline.role.clone(),
                     message_websocket::MessageSocketType::SessionDescription {
-                        uuid: self.uuid.to_string(), 
+                        uuid: self.uuid.to_string(),
                         types: "offer".to_string(),
                         sdp: offer.get_sdp().as_text().unwrap(),
                     },

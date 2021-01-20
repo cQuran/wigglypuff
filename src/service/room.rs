@@ -35,14 +35,6 @@ impl Handler<room::Connect> for Room {
             .entry(connect.room_name.clone())
             .or_insert_with(HashSet::new)
             .insert(connect.uuid.clone());
-
-        let message_new_user = serde_json::to_string(&message_websocket::UserStatus {
-            action: "NewUser",
-            uuid: &connect.uuid,
-        })
-        .unwrap();
-
-        self.broadcast(&connect.uuid, &connect.room_name, &message_new_user)
     }
 }
 
@@ -156,16 +148,28 @@ impl Handler<webrtc::WigglypuffWebRTC> for Room {
     type Result = ();
 
     fn handle(&mut self, mut webrtc: webrtc::WigglypuffWebRTC, _: &mut Context<Self>) {
-        let (uuid_src, uuid_sink) = match webrtc.role {
-            webrtc::Role::Producer {} => (webrtc.uuid.clone(), webrtc.uuid.clone()),
-            webrtc::Role::Consumer {} => {
-                let result: Vec<&str> = webrtc.uuid.split("_sink:").collect();
-                (result[0][4..].to_string(), result[1].to_string())
+        match webrtc.data {
+            message_websocket::MessageSocketType::WebRTCConnectionState {} => {
+                let message_new_user = serde_json::to_string(&message_websocket::UserStatus {
+                    action: "NewUser",
+                    uuid: &webrtc.uuid,
+                })
+                .unwrap();
+                self.broadcast(&webrtc.uuid, &webrtc.room_name, &message_new_user);
             }
-        };
-        webrtc.uuid = uuid_src;
-        let message = serde_json::to_string(&webrtc).unwrap();
-        self.send_user(&uuid_sink, &webrtc.room_name, &message);
+            _ => {
+                let (uuid_src, uuid_sink) = match webrtc.role {
+                    webrtc::Role::Producer {} => (webrtc.uuid.clone(), webrtc.uuid.clone()),
+                    webrtc::Role::Consumer {} => {
+                        let result: Vec<&str> = webrtc.uuid.split("_sink:").collect();
+                        (result[0][4..].to_string(), result[1].to_string())
+                    }
+                };
+                webrtc.uuid = uuid_src;
+                let message = serde_json::to_string(&webrtc).unwrap();
+                self.send_user(&uuid_sink, &webrtc.room_name, &message);
+            }
+        }
     }
 }
 

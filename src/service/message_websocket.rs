@@ -56,6 +56,13 @@ pub fn send_to_client_webrtc(
                 sdp: sdp.to_owned(),
             });
         }
+        message_websocket::MessageSocketType::RequestPair { uuid } => {
+            context.webrtc_address.do_send(webrtc::RequestPair {
+                room_name: context.room_name.clone(),
+                from_uuid: context.uuid.clone(),
+                uuid: uuid.to_string(),
+            });
+        }
         _ => {
             info!("INCORRECT PATTERN");
         }

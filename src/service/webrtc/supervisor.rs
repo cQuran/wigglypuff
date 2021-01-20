@@ -71,6 +71,20 @@ impl Handler<webrtc::ICECandidate> for Supervisor {
     }
 }
 
+impl Handler<webrtc::RequestPair> for Supervisor {
+    type Result = ();
+
+    fn handle(&mut self, user: webrtc::RequestPair, _: &mut Context<Self>) {
+        info!(
+            "[ROOM: {}] [UUID: {}] [REQUEST PAIR USER]",
+            user.room_name, user.uuid
+        );
+        if let Some(channel) = self.channels.get(&user.room_name) {
+            channel.do_send(user);
+        }
+    }
+}
+
 impl Handler<supervisor::DeleteUser> for Supervisor {
     type Result = ();
 

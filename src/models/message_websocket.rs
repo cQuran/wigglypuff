@@ -37,5 +37,9 @@ pub enum MessageSocketType {
         types: String,
         sdp: String,
         uuid: String,
-    }
+    },
+    WebRTCConnectionState,
+    RequestPair {
+        uuid: String,
+    },
 }
