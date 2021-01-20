@@ -1,6 +1,5 @@
 use crate::constants;
 use crate::models::room as models_room;
-use crate::models::webrtc as models_webrtc;
 use crate::service::room as service_room;
 use crate::models::supervisor as supervisor;
 use crate::service::{session, webrtc};
