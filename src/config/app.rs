@@ -15,6 +15,12 @@ pub fn config_services(config: &mut web::ServiceConfig) {
                             web::get().to(network_transversal_controller::get_stun_address),
                         )),
                 )
+                .service(web::scope("/webrtc.js").service(
+                    web::resource("").route(web::get().to(room_controller::get_webrtc_js)),
+                ))
+                .service(web::scope("/webrtc").service(
+                    web::resource("").route(web::get().to(room_controller::get_webrtc_client)),
+                ))
                 .service(
                     web::scope("/user/kick").service(
                         web::resource("").route(

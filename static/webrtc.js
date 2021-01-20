@@ -146,7 +146,15 @@ function makeid(length) {
 }
 
 function wigglypuffConnect() {
-    var wigglypuffUrl = 'ws://cquran.my.id:443/api/room/join/dssn/' + uuid;
+    var loc = window.location, new_uri;
+    if (loc.protocol === "https:") {
+        new_uri = "wss:";
+    } else {
+        new_uri = "ws:";
+    }
+    new_uri += "//" + loc.host;
+
+    var wigglypuffUrl = new_uri + '/api/room/join/dssn/' + uuid;
     wigglypuffConnection = new WebSocket(wigglypuffUrl);
     wigglypuffConnection.addEventListener('open', onWigglypuffConnect);
     wigglypuffConnection.addEventListener('error', onWigglypuffError);

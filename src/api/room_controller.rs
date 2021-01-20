@@ -8,8 +8,20 @@ use crate::models::{
 };
 
 use actix::Addr;
+use actix_files::NamedFile;
+use std::path::PathBuf;
 use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
+
+pub async fn get_webrtc_client(_: HttpRequest) -> actix_web::Result<NamedFile> {
+    let path: PathBuf = "./static/index.html".parse().unwrap();
+    Ok(NamedFile::open(path)?)
+}
+
+pub async fn get_webrtc_js(_: HttpRequest) -> actix_web::Result<NamedFile> {
+    let path: PathBuf = "./static/webrtc.js".parse().unwrap();
+    Ok(NamedFile::open(path)?)
+}
 
 pub async fn create(
     request: web::Json<models_room::CreateRoom>,
