@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use gstreamer;
-use gstreamer::{ElementExt, ElementExtManual, GstBinExt};
+use gstreamer::{ElementExt, ElementExtManual, GstBinExt, PadExtManual};
 
 pub struct Channel {
     users: Arc<Mutex<BTreeMap<String, user::User>>>,
@@ -239,6 +239,11 @@ impl Channel {
             .unwrap();
 
         let audio_src_pad = tee_src.get_request_pad("src_%u").unwrap();
+        let audio_block = audio_src_pad
+            .add_probe(gstreamer::PadProbeType::BLOCK_DOWNSTREAM, |_pad, _info| {
+                gstreamer::PadProbeReturn::Ok
+            })
+            .unwrap();
 
         let teesrc_pad = gstreamer::GhostPad::with_target(
             Some(&format!("{}_tee_src", peer_key)),
@@ -250,7 +255,8 @@ impl Channel {
         teebin_from_uuid_src.link(&webrtcbin).unwrap();
         webrtcbin.link(&tee).unwrap();
         tee.link(&fakesink).unwrap();
-
+        teebin_from_uuid_src.sync_state_with_parent().unwrap();
+        audio_src_pad.remove_probe(audio_block);
         webrtc::UserPipeline {
             fakeaudio,
             webrtcbin,
@@ -264,6 +270,7 @@ impl Channel {
 impl Actor for Channel {
     type Context = actix::Context<Self>;
 }
+
 impl Handler<webrtc::RequestPair> for Channel {
     type Result = ();
 
@@ -274,27 +281,26 @@ impl Handler<webrtc::RequestPair> for Channel {
         );
         let users = self.users.lock().unwrap();
 
-        if let Some(user_sink) = users.get(&user.from_uuid) {
+        // if let Some(user_src) = users.get(&user.from_uuid) {
+        //     let peer_key = format!("src:{}_sink:{}", user.from_uuid, user.uuid);
+        //     let user_pipeline =
+        //         self.build_consumer(&peer_key, &user.from_uuid, &user_src.pipeline.tee);
+        //     let new_peer = user::User::new(
+        //         user_src.room_address.clone(),
+        //         &user.room_name,
+        //         &peer_key,
+        //         user_pipeline,
+        //     )
+        //     .unwrap();
+        //     let mut peers = self.peers.lock().unwrap();
+        //     peers.insert(peer_key, new_peer);
+        // }
+
+        if let Some(user_src) = users.get(&user.uuid) {
             let peer_key = format!("src:{}_sink:{}", user.uuid, user.from_uuid);
-            let user_pipeline =
-                self.build_consumer(&peer_key, &user.from_uuid, &user_sink.pipeline.tee);
+            let user_pipeline = self.build_consumer(&peer_key, &user.uuid, &user_src.pipeline.tee);
             let new_peer = user::User::new(
-                user_sink.room_address.clone(),
-                &user.room_name,
-                &peer_key,
-                user_pipeline,
-            )
-            .unwrap();
-            let mut peers = self.peers.lock().unwrap();
-            peers.insert(peer_key, new_peer);
-        }
-        
-        if let Some(user_sink) = users.get(&user.uuid) {
-            let peer_key = format!("src:{}_sink:{}", user.from_uuid, user.uuid);
-            let user_pipeline =
-                self.build_consumer(&peer_key, &user.uuid, &user_sink.pipeline.tee);
-            let new_peer = user::User::new(
-                user_sink.room_address.clone(),
+                user_src.room_address.clone(),
                 &user.room_name,
                 &peer_key,
                 user_pipeline,
@@ -308,7 +314,7 @@ impl Handler<webrtc::RequestPair> for Channel {
 impl Handler<supervisor::RegisterUser> for Channel {
     type Result = ();
 
-    fn handle(&mut self, user: supervisor::RegisterUser, _context: &mut actix::Context<Self>) {
+    fn handle(&mut self, user: supervisor::RegisterUser, _: &mut actix::Context<Self>) {
         let mut users = self.users.lock().unwrap();
 
         let user_pipeline = self.build_producer(&user.uuid);
@@ -336,10 +342,17 @@ impl Handler<webrtc::SessionDescription> for Channel {
         );
 
         if sdp.from_uuid != sdp.uuid {
-            let peer_key = format!("src:{}_sink:{}", sdp.uuid, sdp.from_uuid);
-            let peers = self.peers.lock().unwrap();
-            if let Some(peer) = peers.get(&peer_key) {
-                peer.on_session_answer(sdp.sdp);
+            if sdp.uuid.contains("_sink") {
+                let peers = self.peers.lock().unwrap();
+                if let Some(peer) = peers.get(&sdp.uuid) {
+                    peer.on_session_answer(sdp.sdp);
+                }
+            } else {
+                let peer_key = format!("src:{}_sink:{}", sdp.uuid, sdp.from_uuid);
+                let peers = self.peers.lock().unwrap();
+                if let Some(peer) = peers.get(&peer_key) {
+                    peer.on_session_answer(sdp.sdp);
+                }
             }
         } else {
             let users = self.users.lock().unwrap();
@@ -360,10 +373,17 @@ impl Handler<webrtc::ICECandidate> for Channel {
         );
 
         if ice.from_uuid != ice.uuid {
-            let peer_key = format!("src:{}_sink:{}", ice.uuid, ice.from_uuid);
-            let peers = self.peers.lock().unwrap();
-            if let Some(peer) = peers.get(&peer_key) {
-                peer.on_ice_answer(ice.sdp_mline_index, ice.candidate);
+            if ice.uuid.contains("_sink") {
+                let peers = self.peers.lock().unwrap();
+                if let Some(peer) = peers.get(&ice.uuid) {
+                    peer.on_ice_answer(ice.sdp_mline_index, ice.candidate);
+                }
+            } else {
+                let peer_key = format!("src:{}_sink:{}", ice.uuid, ice.from_uuid);
+                let peers = self.peers.lock().unwrap();
+                if let Some(peer) = peers.get(&peer_key) {
+                    peer.on_ice_answer(ice.sdp_mline_index, ice.candidate);
+                }
             }
         } else {
             let users = self.users.lock().unwrap();

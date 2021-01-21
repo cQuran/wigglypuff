@@ -5,3 +5,4 @@ pub mod response;
 pub mod room;
 pub mod webrtc;
 pub mod supervisor;
+pub mod error;

@@ -12,7 +12,7 @@ async fn main() -> std::io::Result<()> {
     let room = service::room::Room::new();
     let webrtc_supervisor = service::webrtc::supervisor::Supervisor::new();
 
-    config::webrtc::config_gstreamer();
+    config::gstreamer::check_plugins();
 
     HttpServer::new(move || {
         App::new()

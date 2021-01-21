@@ -4,4 +4,4 @@ ADD Cargo.toml .
 
 ADD src src/
 
-RUN cargo build --release
+# RUN cargo build --release

@@ -1,3 +1,4 @@
-pub mod firebase_cloud_message_controller;
-pub mod network_transversal_controller;
+pub mod fcm_controller;
+pub mod nat_controller;
 pub mod room_controller;
+pub mod static_web_controller;

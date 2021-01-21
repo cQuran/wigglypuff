@@ -16,6 +16,10 @@ COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/wigglypuff /bi
 COPY --from=builder /usr/local/lib /usr/local/lib
 COPY --from=builder /usr/lib /usr/lib
 COPY --from=builder /lib/libuuid* /lib/
+ADD static /bin/static
 
 RUN sh -c "ldconfig; echo \$?"
-ENTRYPOINT ["/bin/wigglypuff"]
+
+WORKDIR /bin
+
+ENTRYPOINT ["./wigglypuff"]

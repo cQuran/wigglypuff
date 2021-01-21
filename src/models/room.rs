@@ -2,9 +2,8 @@ use actix::Recipient;
 use actix_derive::{Message, MessageResponse};
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Message, Deserialize)]
-#[rtype(result = "()")]
+#[rtype(result = "bool")]
 pub struct CreateRoom {
     pub name: String,
     pub master_uuid: String,
@@ -29,12 +28,11 @@ pub struct Connect {
 }
 
 #[derive(MessageResponse, Serialize)]
-pub struct ListRooms(pub Vec<String>);
+pub struct Rooms(pub Vec<String>);
 
 #[derive(Message)]
-#[rtype(result = "ListRooms")]
-pub struct GetListRoom {}
-
+#[rtype(result = "Rooms")]
+pub struct GetRooms {}
 
 #[derive(Message)]
 #[rtype(result = "()")]
@@ -63,4 +61,10 @@ pub struct KickUser {
 #[rtype(result = "()")]
 pub struct DeleteRoom {
     pub name: String,
+}
+
+#[derive(Deserialize)]
+pub struct Join {
+    pub room_name: String,
+    pub uuid: String,
 }

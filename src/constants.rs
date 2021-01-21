@@ -1,10 +1,11 @@
-pub const MESSAGE_OK: bool = true;
-pub const MESSAGE_ERROR: bool = false;
 pub const MESSAGE_ROOM_DOESNT_EXIST: &str = "room doesn't exist / deleted";
+pub const MESSAGE_USER_NOT_WEBSOCKET: &str = "please use it using websocket!";
 pub const MESSAGE_ROOM_CREATED: &str = "room created";
 pub const MESSAGE_ROOM_DELETED: &str = "room deleted";
+pub const MESSAGE_JSON_PARSE_ERROR: &str = "error parsing json";
 pub const MESSAGE_USER_KICKED: &str = "user kicked";
 pub const MESSAGE_FORBIDDEN_AUTHZ: &str = r#"{"action":"Forbidden","message":"you are not allowed to emit this message, closed automatically"}"#;
+
 pub const FCM_API_TOKEN_KEY: &str = "okk";
 pub const STUN_SERVER: &str = "stun://global.stun.twilio.com:3478?transport=udp";
 pub const TURN_CREDENTIAL: &str =
@@ -16,9 +17,7 @@ pub const TURN_ADDRESS: [&str; 3] = [
     "turn://global.turn.twilio.com:443?transport=tcp",
 ];
 
-pub const PLUGIN_WEBRTC: [&str; 10] = [
-    "videotestsrc",
-    "videoconvert",
+pub const PLUGIN_WEBRTC: [&str; 8] = [
     "autodetect",
     "vpx",
     "webrtc",

@@ -2,7 +2,7 @@ use crate::constants;
 use gstreamer;
 use log::info;
 
-pub fn config_gstreamer() {
+pub fn check_plugins() {
     gstreamer::init().unwrap();
 
     let plugin = constants::PLUGIN_WEBRTC;

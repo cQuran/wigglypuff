@@ -41,20 +41,20 @@ impl Handler<room::Connect> for Room {
 impl Handler<room::KickUser> for Room {
     type Result = ();
 
-    fn handle(&mut self, kick_user: room::KickUser, _: &mut Context<Self>) {
-        self.sessions.remove(&kick_user.uuid);
+    fn handle(&mut self, user: room::KickUser, _: &mut Context<Self>) {
+        self.sessions.remove(&user.uuid);
         self.rooms
-            .entry(kick_user.room_name.clone())
+            .entry(user.room_name.clone())
             .or_insert_with(HashSet::new)
-            .remove(&kick_user.uuid);
-        self.masters.remove(&kick_user.uuid);
-        let message_kick_user = serde_json::to_string(&message_websocket::UserStatus {
+            .remove(&user.uuid);
+        self.masters.remove(&user.uuid);
+        let status = serde_json::to_string(&message_websocket::UserStatus {
             action: "UserLeave",
-            uuid: &kick_user.uuid,
+            uuid: &user.uuid,
         })
         .unwrap();
 
-        self.broadcast(&kick_user.uuid, &kick_user.room_name, &message_kick_user)
+        self.broadcast(&user.uuid, &user.room_name, &status)
     }
 }
 
@@ -75,13 +75,22 @@ impl Handler<room::Broadcast> for Room {
 }
 
 impl Handler<room::CreateRoom> for Room {
-    type Result = ();
+    type Result = bool;
 
-    fn handle(&mut self, create_room: room::CreateRoom, _: &mut Context<Self>) {
-        self.masters
-            .insert(create_room.name.clone(), create_room.master_uuid.clone());
-        self.rooms
-            .insert(create_room.name.to_owned(), HashSet::new());
+    fn handle(&mut self, create_room: room::CreateRoom, _: &mut Context<Self>) -> Self::Result {
+        match !self.masters.contains_key(&create_room.name)
+            && !self.rooms.contains_key(&create_room.name)
+        {
+            true => {
+                self.masters
+                    .insert(create_room.name.clone(), create_room.master_uuid.clone());
+                self.rooms
+                    .insert(create_room.name.to_owned(), HashSet::new());
+
+                true
+            }
+            false => false,
+        }
     }
 }
 
@@ -96,18 +105,18 @@ impl Handler<room::GetMaster> for Room {
     }
 }
 
-impl Handler<room::GetListRoom> for Room {
-    type Result = <room::GetListRoom as actix::Message>::Result;
+impl Handler<room::GetRooms> for Room {
+    type Result = <room::GetRooms as actix::Message>::Result;
 
-    fn handle(&mut self, _: room::GetListRoom, _: &mut Context<Self>) -> room::ListRooms {
-        let all_rooms: Vec<String> = self
+    fn handle(&mut self, _: room::GetRooms, _: &mut Context<Self>) -> room::Rooms {
+        let rooms: Vec<String> = self
             .rooms
             .clone()
             .into_iter()
             .map(|(room_name, _)| room_name)
             .collect();
 
-        room::ListRooms(all_rooms)
+        room::Rooms(rooms)
     }
 }
 

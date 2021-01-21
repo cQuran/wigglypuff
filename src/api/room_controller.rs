@@ -1,80 +1,63 @@
 use crate::constants;
-use crate::models::room as models_room;
-use crate::service::room as service_room;
-use crate::models::supervisor as supervisor;
-use crate::service::{session, webrtc};
-use crate::models::{
-    response,
-};
+use crate::models::{error, response, room as room_models, supervisor};
+use crate::service::{room as room_service, session, webrtc};
 
 use actix::Addr;
-use actix_files::NamedFile;
-use std::path::PathBuf;
 use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 
-pub async fn get_webrtc_client(_: HttpRequest) -> actix_web::Result<NamedFile> {
-    let path: PathBuf = "./static/index.html".parse().unwrap();
-    Ok(NamedFile::open(path)?)
-}
-
-pub async fn get_webrtc_js(_: HttpRequest) -> actix_web::Result<NamedFile> {
-    let path: PathBuf = "./static/webrtc.js".parse().unwrap();
-    Ok(NamedFile::open(path)?)
-}
-
 pub async fn create(
-    request: web::Json<models_room::CreateRoom>,
-    room_address: web::Data<Addr<service_room::Room>>,
-) -> Result<HttpResponse, Error> {
-    room_address.get_ref().do_send(models_room::CreateRoom {
-        name: request.name.to_owned(),
-        master_uuid: request.master_uuid.to_owned(),
-    });
-    Ok(HttpResponse::Ok().json(
-        response::ResponseBody::new(
-            constants::MESSAGE_OK, 
-            constants::MESSAGE_ROOM_CREATED
-        )
-    ))
+    request: web::Json<room_models::CreateRoom>,
+    room_address: web::Data<Addr<room_service::Room>>,
+) -> Result<HttpResponse, error::WigglypuffError> {
+    let is_unique = room_address
+        .get_ref()
+        .send(room_models::CreateRoom {
+            name: request.name.to_owned(),
+            master_uuid: request.master_uuid.to_owned(),
+        })
+        .await?;
+
+    if is_unique {
+        Ok(HttpResponse::Ok().json(response::ResponseBody::Message(
+            constants::MESSAGE_ROOM_CREATED,
+        )))
+    } else {
+        Err(error::WigglypuffError::RoomAlreadyExist)
+    }
 }
 
-pub async fn get_all_room(
-    room_address: web::Data<Addr<service_room::Room>>
-) -> Result<HttpResponse, Error> {
-    let rooms = room_address.get_ref().send(
-        models_room::GetListRoom {}
-    ).await;
+pub async fn get_rooms(
+    room_address: web::Data<Addr<room_service::Room>>,
+) -> Result<HttpResponse, error::WigglypuffError> {
+    let rooms = room_address
+        .get_ref()
+        .send(room_models::GetRooms {})
+        .await?;
 
-    Ok(HttpResponse::Ok().json(
-        response::ResponseBody::new(
-            constants::MESSAGE_OK, rooms.unwrap()
-        )
-    ))
+    Ok(HttpResponse::Ok().json(response::ResponseBody::Rooms(rooms)))
 }
 
 pub async fn join(
-    parameter: web::Path<(String, String)>,
+    room: web::Path<room_models::Join>,
     request: HttpRequest,
     stream: web::Payload,
     webrtc_address: web::Data<Addr<webrtc::supervisor::Supervisor>>,
-    room_address: web::Data<Addr<service_room::Room>>,
+    room_address: web::Data<Addr<room_service::Room>>,
 ) -> Result<HttpResponse, Error> {
-    let master_uuid = room_address.get_ref().send(models_room::GetMaster {
-        room_name: parameter.0.0.clone()
-    } ).await.unwrap();
+    let master_uuid = room_address
+        .get_ref()
+        .send(room_models::GetMaster {
+            room_name: room.room_name.clone(),
+        })
+        .await
+        .unwrap();
 
     if &master_uuid != "NAN" {
-        webrtc_address.get_ref().send(supervisor::RegisterUser {
-            room_address: room_address.get_ref().clone(),
-            room_name: parameter.0.0.clone(),
-            uuid: parameter.0.1.to_owned()
-        } ).await.unwrap();
-
         let response = ws::start(
             session::Session {
-                room_name: parameter.0.0.to_owned(),
-                uuid: parameter.0.1.to_owned(),
+                room_name: room.room_name.to_owned(),
+                uuid: room.uuid.to_owned(),
                 room_address: room_address.get_ref().clone(),
                 master_uuid: master_uuid,
                 webrtc_address: webrtc_address.get_ref().clone(),
@@ -83,58 +66,72 @@ pub async fn join(
             stream,
         );
 
-        response
-    } else {
-        Ok(HttpResponse::Forbidden().json(
-            response::ResponseBody::new(
-                constants::MESSAGE_ERROR, 
-                constants::MESSAGE_ROOM_DOESNT_EXIST
-            )
-        ))
-    }
+        if response.is_ok() {
+            webrtc_address
+                .get_ref()
+                .send(supervisor::RegisterUser {
+                    room_address: room_address.get_ref().clone(),
+                    room_name: room.room_name.clone(),
+                    uuid: room.uuid.to_owned(),
+                })
+                .await
+                .unwrap();
 
+            response
+        } else {
+            Ok(
+                HttpResponse::Forbidden().json(response::ResponseBody::Message(
+                    constants::MESSAGE_USER_NOT_WEBSOCKET,
+                )),
+            )
+        }
+    } else {
+        Ok(
+            HttpResponse::Forbidden().json(response::ResponseBody::Message(
+                constants::MESSAGE_ROOM_DOESNT_EXIST,
+            )),
+        )
+    }
 }
 
 pub async fn delete_room(
-    request: web::Json<models_room::DeleteRoom>,
-    room_address: web::Data<Addr<service_room::Room>>,
-) -> Result<HttpResponse, Error> {
+    room: web::Json<room_models::DeleteRoom>,
+    room_address: web::Data<Addr<room_service::Room>>,
+) -> Result<HttpResponse, error::WigglypuffError> {
     room_address
         .get_ref()
-        .do_send(models_room::DeleteRoom {
-            name: request.name.to_owned(),
-        });
+        .send(room_models::DeleteRoom {
+            name: room.name.to_owned(),
+        })
+        .await?;
 
-    Ok(HttpResponse::Ok().json(
-        response::ResponseBody::new(
-            constants::MESSAGE_OK,
-            constants::MESSAGE_ROOM_DELETED,
-        )
-    ))
+    Ok(HttpResponse::Ok().json(response::ResponseBody::Message(
+        constants::MESSAGE_ROOM_DELETED,
+    )))
 }
 
-pub async fn kick_user(
-    request: web::Json<supervisor::DeleteUser>,
+pub async fn delete_user(
+    user: web::Json<supervisor::DeleteUser>,
     webrtc_address: web::Data<Addr<webrtc::supervisor::Supervisor>>,
-    room_address: web::Data<Addr<service_room::Room>>,
-) -> Result<HttpResponse, Error> {
-
-    let _ = webrtc_address
+    room_address: web::Data<Addr<room_service::Room>>,
+) -> Result<HttpResponse, error::WigglypuffError> {
+    webrtc_address
         .get_ref()
-        .do_send(supervisor::DeleteUser {
-            uuid: request.uuid.to_owned(),
-            room_name: request.room_name.to_owned(),
-        });
+        .send(supervisor::DeleteUser {
+            uuid: user.uuid.to_owned(),
+            room_name: user.room_name.to_owned(),
+        })
+        .await?;
 
-    let _ = room_address
+    room_address
         .get_ref()
-        .do_send(models_room::KickUser {
-            uuid: request.uuid.to_owned(),
-            room_name: request.room_name.to_owned(),
-        });
+        .send(room_models::KickUser {
+            uuid: user.uuid.to_owned(),
+            room_name: user.room_name.to_owned(),
+        })
+        .await?;
 
-    Ok(HttpResponse::Ok().json(response::ResponseBody::new(
-        constants::MESSAGE_OK,
+    Ok(HttpResponse::Ok().json(response::ResponseBody::Message(
         constants::MESSAGE_USER_KICKED,
     )))
 }

@@ -9,8 +9,5 @@ pub async fn get_firebase_cloud_message_token() -> Result<HttpResponse> {
         token: &constants::FCM_API_TOKEN_KEY,
     };
 
-    Ok(HttpResponse::Ok().json(response::ResponseBody::new(
-        constants::MESSAGE_OK,
-        token_fcm,
-    )))
+    Ok(HttpResponse::Ok().json(response::ResponseBody::FcmTokens(token_fcm)))
 }

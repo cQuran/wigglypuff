@@ -24,7 +24,6 @@ pub struct UserInner {
     pub room_address: Addr<service_room::Room>,
     pub room_name: String,
     pub uuid: String,
-    pub status: String,
     pub pipeline: webrtc::UserPipeline
 }
 
@@ -62,12 +61,10 @@ impl User {
 
         let uuid = request_uuid.to_string();
         let room_name = requst_room_name.to_string();
-        let status = "ready".to_string();
         let user = User(Arc::new(UserInner {
             room_address,
             room_name,
             uuid,
-            status,
             pipeline,
         }));
 

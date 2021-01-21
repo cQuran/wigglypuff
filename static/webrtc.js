@@ -1,6 +1,7 @@
 var wigglypuffConnection;
 var rtcConfiguration = { iceServers: [{ urls: "stun:global.stun.twilio.com:3478?transport=udp" }] };
 let uuid = makeid(5);
+var uuid_new;
 
 class Connection {
     constructor(uuid, rtcConfiguration, wigglypuffConnection) {
@@ -17,14 +18,14 @@ class Connection {
         let peerConnection = new RTCPeerConnection(this.rtcConfiguration);
         peerConnection.ontrack = onRemoteTrack;
         peerConnection.oniceconnectionstatechange = event => {
-            console.log(event);
+            console.log("[" + this.uuid + "]", "[CONNECTION STATE CHANGE]", event.currentTarget.connectionState);
         }
         peerConnection.onnegotiationneeded = event => {
-            console.log(event);
+            console.log("[" + this.uuid + "]", "[NEGOTIATION NEED]");
         }
         peerConnection.onicecandidate = event => {
+            console.log("[" + this.uuid + "]", "[ON ICE CANDIDATE]", event.currentTarget.connectionState);
             if (event.candidate) {
-                console.log("INI UUUDD", this.uuid);
                 this.wigglypuffConnection.send(JSON.stringify({ uuid: this.uuid, candidate: event.candidate.candidate, sdpMLineIndex: event.candidate.sdpMLineIndex, action: "ICECandidate" }));
             }
         };
@@ -37,20 +38,20 @@ class Connection {
         return peerConnection;
     }
 
-    setLocalDescription(desc) {
+    setLocalDescription(desc, uuid) {
+        console.log("[" + uuid + "]", "[SET LOCAL DESCRIPTION]");
         this.peerConnection.setLocalDescription(desc).then(() => {
             let sdp = this.peerConnection.localDescription;
-            console.log("InIII", this.uuid);
-            this.wigglypuffConnection.send(JSON.stringify({ uuid: this.uuid, type: sdp.type, sdp: sdp.sdp, action: "SessionDescription" }));
+            this.wigglypuffConnection.send(JSON.stringify({ uuid: uuid, type: sdp.type, sdp: sdp.sdp, action: "SessionDescription" }));
         });
     }
 
-    setRemoteDescription(sdp) {
-        console.log(this.peerConnection);
+    setRemoteDescription(sdp, uuid) {
+        console.log("[" + uuid + "]", "[SET REMOTE DESCRIPTION]");
         this.peerConnection.setRemoteDescription(sdp).catch(this.setError);
         this.localStreamPromise.then((stream) => {
             this.peerConnection.createAnswer()
-                .then(e => this.setLocalDescription(e)).catch(this.setError);
+                .then(e => this.setLocalDescription(e, uuid)).catch(this.setError);
 
         }).catch(this.setError);
 
@@ -58,6 +59,7 @@ class Connection {
     }
 
     addICECandidate(candidates) {
+        console.log("[" + this.uuid + "]", "[ADD ICE CANDIDATE]");
         let ice = new RTCIceCandidate(candidates);
         this.peerConnection.addIceCandidate(ice).catch(e => {
             console.log("Failure during addIceCandidate(): " + e.name);
@@ -86,42 +88,35 @@ function onWigglypuffMessage(event) {
     if (message.data) {
         switch (message.data.action) {
             case "SessionDescription":
-                if (connections.length === 0) {
-                    let connection = new Connection(uuid, rtcConfiguration, wigglypuffConnection);
-                    connection.createRTCConnection();
-                    connection.setRemoteDescription(message.data);
-                    connections.push(connection);
-                } else {
-                    connections.forEach(connection => {
-                        if (connection.uuid === message.uuid) {
-                            connection.setRemoteDescription(message.data);
-                        }
-                    });
-                }
+                let connection = new Connection(message.data.uuid, rtcConfiguration, wigglypuffConnection);
+                connections.push(connection);
+                connection.createRTCConnection();
+                connection.setRemoteDescription(message.data, message.data.uuid);
+
                 break;
             case "ICECandidate":
-                console.log("PESANN", message);
+                let ice_exist = false;
                 connections.forEach(connection => {
-                    if (connection.uuid === message.uuid) {
-                        console.log("ICE MASUKKKK", connection.uuid, message.uuid);
+                    if (connection.uuid === message.data.uuid) {
                         let candidates = {
                             candidate: message.data.candidate, sdpMLineIndex: message.data.sdpMLineIndex
                         };
                         connection.addICECandidate(candidates);
                     }
+                    ice_exist = true;
                 });
+
+                if (ice_exist === false) {
+                    console.log("LOHH HEEEE");
+                }
                 break;
         }
     }
 
     if (message.action) {
-        console.log("ADAAA", message);
         if (message.action === "NewUser") {
-            wigglypuffConnection.send(JSON.stringify({ uuid: message.uuid, action: "RequestPair" }));
-            let connection = new Connection(message.uuid, rtcConfiguration, wigglypuffConnection);
-            connection.createRTCConnection();
-            connections.push(connection);
-            console.log("MUNCUL BARU");
+            console.log("[NEW]", message.uuid);
+            uuid_new = message.uuid;
         }
 
 
@@ -165,11 +160,8 @@ function wigglypuffConnect() {
 
 
 function onConnectClicked() {
-    var clickAya = {
-        'action': 'ClickAya',
-        'aya': 1
-    }
-    wigglypuffConnection.send(JSON.stringify(clickAya));
+    console.log("[CLICK]", uuid_new);
+    wigglypuffConnection.send(JSON.stringify({ uuid: uuid_new, action: "RequestPair" }));
 }
 
 function getVideoElement() {
@@ -177,6 +169,7 @@ function getVideoElement() {
 }
 
 function onRemoteTrack(event) {
+    console.log("[ON REMOTE TRACK]");
     if (getVideoElement().srcObject !== event.streams[0]) {
         console.log('Incoming stream');
         getVideoElement().srcObject = event.streams[0];

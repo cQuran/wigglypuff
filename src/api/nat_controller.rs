@@ -20,8 +20,5 @@ pub async fn get_stun_address() -> Result<HttpResponse> {
         stun: stun_address,
         turn: turns,
     };
-    Ok(HttpResponse::Ok().json(response::ResponseBody::new(
-        constants::MESSAGE_OK,
-        network_transversal,
-    )))
+    Ok(HttpResponse::Ok().json(response::ResponseBody::Addresses(network_transversal)))
 }
