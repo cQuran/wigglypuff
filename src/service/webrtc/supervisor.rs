@@ -76,7 +76,7 @@ impl Handler<webrtc::RequestPair> for Supervisor {
 
     fn handle(&mut self, user: webrtc::RequestPair, _: &mut Context<Self>) {
         info!(
-            "[ROOM: {}] [UUID: {}] [REQUEST PAIR USER]",
+            "[ROOM: {}] [REQUEST TO LISTEN UUID: {}]",
             user.room_name, user.uuid
         );
         if let Some(channel) = self.channels.get(&user.room_name) {

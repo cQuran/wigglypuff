@@ -200,7 +200,7 @@ impl Room {
     }
     fn send_user(&self, to_uuid: &str, room_name: &str, message: &str) {
         info!(
-            "[ROOM: {}] [TO UUID: {}] [SEND USER] [MESSAGE: {}]",
+            "[ROOM: {}] [SEND USER] [TO UUID: {}] [MESSAGE: {}]",
             room_name, to_uuid, message
         );
         if let Some(sessions) = self.rooms.get(room_name) {

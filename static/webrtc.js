@@ -85,6 +85,7 @@ function onWigglypuffConnect() {
 }
 function onWigglypuffMessage(event) {
     var message = JSON.parse(event.data);
+    console.log(message);
     if (message.data) {
         switch (message.data.action) {
             case "SessionDescription":
@@ -116,7 +117,7 @@ function onWigglypuffMessage(event) {
     if (message.action) {
         if (message.action === "NewUser") {
             console.log("[NEW]", message.uuid);
-            uuid_new = message.uuid;
+            wigglypuffConnection.send(JSON.stringify({ uuid: message.uuid, action: "RequestPair" }));
         }
 
 
@@ -150,7 +151,7 @@ function wigglypuffConnect() {
     }
     new_uri += "//" + loc.host;
 
-    var wigglypuffUrl = new_uri + '/api/room/join/dssn/' + uuid;
+    var wigglypuffUrl = new_uri + '/websocket/dssn/' + uuid;
     wigglypuffConnection = new WebSocket(wigglypuffUrl);
     wigglypuffConnection.addEventListener('open', onWigglypuffConnect);
     wigglypuffConnection.addEventListener('error', onWigglypuffError);
@@ -161,7 +162,6 @@ function wigglypuffConnect() {
 
 function onConnectClicked() {
     console.log("[CLICK]", uuid_new);
-    wigglypuffConnection.send(JSON.stringify({ uuid: uuid_new, action: "RequestPair" }));
 }
 
 function getVideoElement() {

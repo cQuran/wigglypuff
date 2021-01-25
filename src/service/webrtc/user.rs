@@ -4,7 +4,7 @@ use actix::Addr;
 use anyhow::Error;
 use glib::ToValue;
 use gstreamer;
-use gstreamer::{prelude::ObjectExt, GstBinExt};
+use gstreamer::{prelude::ObjectExt, ElementExt, GstBinExt, PadExt, PadExtManual};
 use log::info;
 use std::sync::{Arc, Weak};
 
@@ -24,7 +24,7 @@ pub struct UserInner {
     pub room_address: Addr<service_room::Room>,
     pub room_name: String,
     pub uuid: String,
-    pub pipeline: webrtc::UserPipeline
+    pub pipeline: webrtc::UserPipeline,
 }
 
 #[derive(Clone)]
@@ -55,7 +55,7 @@ impl User {
         pipeline: webrtc::UserPipeline,
     ) -> Result<Self, Error> {
         info!(
-            "[ROOM: {}] [UUID: {}] Creating WebRTC User Instance",
+            "[ROOM: {}] [UUID: {}] [CREATING WEBRTC INSTANCE] ",
             requst_room_name, request_uuid
         );
 
@@ -78,7 +78,7 @@ impl User {
         webrtcbin
             .connect("on-negotiation-needed", false, move |_values| {
                 let user = upgrade_app_weak_reference!(user_clone, None);
-                user.on_negotiation_needed();
+                user.on_offer_from_gstreamer();
                 None
             })
             .unwrap();
@@ -93,92 +93,17 @@ impl User {
                     .unwrap();
 
                 let user = upgrade_app_weak_reference!(user_clone, None);
-                user.on_ice_candidate(&candidate, &sdp_mline_index);
+                user.on_ice_from_gstreamer(&candidate, &sdp_mline_index);
                 None
             })
             .unwrap();
 
-        let room_name_copy = requst_room_name.to_string();
-        let uuid_copy = request_uuid.to_string();
-
         let user_clone = user.downgrade_to_weak_reference();
-        webrtcbin.connect_notify(Some("connection-state"), move |webrtcbin, _| {
-            let connection = webrtcbin
-                .get_property("connection-state")
-                .unwrap()
-                .get::<gstreamer_webrtc::WebRTCPeerConnectionState>()
-                .unwrap();
-            info!(
-                "[ROOM: {}] [UUID: {}] [CONNECTION STATE: {:#?}]",
-                room_name_copy,
-                uuid_copy,
-                connection.unwrap()
-            );
-            if connection.unwrap() == gstreamer_webrtc::WebRTCPeerConnectionState::Connected {
-                let user = upgrade_app_weak_reference!(user_clone);
-                match user.pipeline.role {
-                    webrtc::Role::Consumer {} => {
-                        info!("INI CONSUMER");
-                    }
-                    webrtc::Role::Producer {} => {
-                        user.room_address.do_send(webrtc::WigglypuffWebRTC::new(
-                            &uuid_copy,
-                            &room_name_copy,
-                            user.pipeline.role.clone(),
-                            message_websocket::MessageSocketType::WebRTCConnectionState,
-                        ));
-                    }
-                };
-            }
+        webrtcbin.connect_pad_added(move |_webrtc, pad| {
+            let user = upgrade_app_weak_reference!(user_clone);
+            user.on_incoming_stream(pad);
         });
 
-        let room_name_copy = requst_room_name.to_string();
-        let uuid_copy = request_uuid.to_string();
-        webrtcbin.connect_notify(Some("ice-connection-state"), move |webrtcbin, _| {
-            let ice_connection = webrtcbin
-                .get_property("ice-connection-state")
-                .unwrap()
-                .get::<gstreamer_webrtc::WebRTCICEConnectionState>()
-                .unwrap();
-            info!(
-                "[ROOM: {}] [UUID: {}] [ICE CONNECTION STATE: {:#?}]",
-                room_name_copy,
-                uuid_copy,
-                ice_connection.unwrap()
-            );
-        });
-
-        let room_name_copy = requst_room_name.to_string();
-        let uuid_copy = request_uuid.to_string();
-        webrtcbin.connect_notify(Some("ice-gathering-state"), move |webrtcbin, _| {
-            let gather_connection = webrtcbin
-                .get_property("ice-gathering-state")
-                .unwrap()
-                .get::<gstreamer_webrtc::WebRTCICEGatheringState>()
-                .unwrap();
-            info!(
-                "[ROOM: {}] [UUID: {}] [GATHER CONNECTION STATE: {:#?}]",
-                room_name_copy,
-                uuid_copy,
-                gather_connection.unwrap()
-            );
-        });
-
-        let room_name_copy = requst_room_name.to_string();
-        let uuid_copy = request_uuid.to_string();
-        webrtcbin.connect_notify(Some("signaling-state"), move |webrtcbin, _| {
-            let signalling = webrtcbin
-                .get_property("signaling-state")
-                .unwrap()
-                .get::<gstreamer_webrtc::WebRTCSignalingState>()
-                .unwrap();
-            info!(
-                "[ROOM: {}] [UUID: {}] [SIGNALLING STATE: {:#?}]",
-                room_name_copy,
-                uuid_copy,
-                signalling.unwrap()
-            );
-        });
         Ok(user)
     }
 
@@ -186,7 +111,7 @@ impl User {
         UserWeak(Arc::downgrade(&self.0))
     }
 
-    pub fn on_session_answer(&self, session_description_request: String) {
+    pub fn set_session_to_gstreamer(&self, session_description_request: String) {
         let ret = gstreamer_sdp::SDPMessage::parse_buffer(session_description_request.as_bytes())
             .map_err(|_| info!("Failed to parse SDP offer"))
             .unwrap();
@@ -210,7 +135,7 @@ impl User {
             .unwrap();
     }
 
-    pub fn on_ice_answer(&self, sdp_mline_index: u32, candidate: String) {
+    pub fn set_ice_to_gstreamer(&self, sdp_mline_index: u32, candidate: String) {
         let webrtcbin = self
             .pipeline
             .webrtcbin
@@ -222,7 +147,7 @@ impl User {
             .unwrap();
     }
 
-    fn on_negotiation_needed(&self) {
+    fn on_offer_from_gstreamer(&self) {
         info!(
             "[ROOM: {}] [UUID: {}] [WEBRTC] [STARTING NEGOTIATION]",
             self.room_name, self.uuid
@@ -262,7 +187,7 @@ impl User {
             .unwrap();
     }
 
-    fn on_ice_candidate(&self, candidate: &String, sdp_mline_index: &u32) {
+    fn on_ice_from_gstreamer(&self, candidate: &String, sdp_mline_index: &u32) {
         self.room_address.do_send(webrtc::WigglypuffWebRTC::new(
             &self.uuid,
             &self.room_name,
@@ -319,5 +244,44 @@ impl User {
                 info!("Offer creation future got error reponse: {:?}", err);
             }
         };
+    }
+
+    fn on_incoming_stream(&self, pad: &gstreamer::Pad) {
+        if pad.get_direction() == gstreamer::PadDirection::Src {
+            let rtpopusdepay =
+                gstreamer::ElementFactory::make("rtpopusdepay", Some("source")).unwrap();
+
+            self.pipeline.webrtcbin.add(&rtpopusdepay).unwrap();
+            rtpopusdepay.sync_state_with_parent().unwrap();
+            pad.link(&rtpopusdepay.get_static_pad("sink").unwrap())
+                .unwrap();
+
+            let rtpopusdepay_src_pad = gstreamer::GhostPad::with_target(
+                Some(&format!("{}_audiosrc", self.uuid)),
+                &rtpopusdepay.get_static_pad("src").unwrap(),
+            )
+            .unwrap();
+            rtpopusdepay_src_pad.set_active(true).unwrap();
+
+            self.pipeline
+                .webrtcbin
+                .add_pad(&rtpopusdepay_src_pad)
+                .unwrap();
+
+            self.pipeline.webrtcbin.link(&self.pipeline.tee).unwrap();
+            self.pipeline.tee.link(&self.pipeline.fakesink).unwrap();
+
+            match self.pipeline.role {
+                webrtc::Role::Consumer {} => {}
+                webrtc::Role::Producer {} => {
+                    self.room_address.do_send(webrtc::WigglypuffWebRTC::new(
+                        &self.uuid,
+                        &self.room_name,
+                        self.pipeline.role.clone(),
+                        message_websocket::MessageSocketType::WebRTCConnectionState,
+                    ));
+                }
+            };
+        }
     }
 }
