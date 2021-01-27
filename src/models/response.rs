@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum ResponseBody<T> {
     Rooms(T),
+    Users(T),
     Addresses(T),
     FcmTokens(T),
     Response(T),

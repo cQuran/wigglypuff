@@ -68,3 +68,12 @@ pub struct Join {
     pub room_name: String,
     pub uuid: String,
 }
+
+#[derive(MessageResponse, Serialize)]
+pub struct Users(pub Vec<String>);
+
+#[derive(Message, Deserialize)]
+#[rtype(result = "Users")]
+pub struct GetUsers {
+    pub name: String,
+}

@@ -38,6 +38,32 @@ pub async fn get_rooms(
     Ok(HttpResponse::Ok().json(response::ResponseBody::Rooms(rooms)))
 }
 
+pub async fn get_user_by_room(
+    room_request: web::Path<room_models::GetUsers>,
+    room_address: web::Data<Addr<room_service::Room>>,
+) -> Result<HttpResponse, error::WigglypuffError> {
+    let room = room_request.into_inner();
+
+    let master_uuid = room_address
+        .get_ref()
+        .send(room_models::GetMaster {
+            room_name: room.name.clone(),
+        })
+        .await
+        .unwrap();
+
+    if &master_uuid != "NAN" {
+        let users = room_address.get_ref().send(room).await?;
+        Ok(HttpResponse::Ok().json(response::ResponseBody::Users(users)))
+    } else {
+        Ok(
+            HttpResponse::Forbidden().json(response::ResponseBody::Message(
+                constants::MESSAGE_ROOM_DOESNT_EXIST,
+            )),
+        )
+    }
+}
+
 pub async fn join(
     room: web::Path<room_models::Join>,
     request: HttpRequest,

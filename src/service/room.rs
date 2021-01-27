@@ -120,6 +120,26 @@ impl Handler<room::GetRooms> for Room {
     }
 }
 
+impl Handler<room::GetUsers> for Room {
+    type Result = <room::GetUsers as actix::Message>::Result;
+
+    fn handle(&mut self, room: room::GetUsers, _: &mut Context<Self>) -> room::Users {
+        match self.masters.get(&room.name) {
+            Some(_) => {
+                let users = self
+                    .rooms
+                    .get(&room.name)
+                    .unwrap()
+                    .iter()
+                    .map(String::from)
+                    .collect();
+                return room::Users(users);
+            }
+            None => return room::Users(Vec::new()),
+        };
+    }
+}
+
 impl Handler<room::DeleteRoom> for Room {
     type Result = <room::DeleteRoom as actix::Message>::Result;
 
