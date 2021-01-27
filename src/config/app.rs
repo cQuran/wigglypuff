@@ -35,6 +35,12 @@ pub fn config_services(config: &mut web::ServiceConfig) {
                 .service(
                     web::scope("/room")
                         .service(
+                            web::scope("/{name}").service(
+                                web::resource("")
+                                    .route(web::get().to(room_controller::get_user_by_room)),
+                            ),
+                        )
+                        .service(
                             web::resource("")
                                 .route(
                                     web::delete()
@@ -51,9 +57,8 @@ pub fn config_services(config: &mut web::ServiceConfig) {
                 ),
         )
         .service(
-            web::scope("/websocket/{room_name}/{uuid}").service(
-                web::resource("").route(web::get().to(room_controller::join)),
-            ),
+            web::scope("/websocket/{room_name}/{uuid}")
+                .service(web::resource("").route(web::get().to(room_controller::join))),
         )
         .service(
             web::scope("/static")
