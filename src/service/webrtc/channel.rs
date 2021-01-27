@@ -1,32 +1,73 @@
 use crate::constants;
+use crate::models::message_websocket;
+use crate::models::room;
 use crate::models::supervisor;
 use crate::models::webrtc;
 use crate::service::webrtc::user;
-use actix::{Actor, Addr, Handler};
+use actix::{Actor, Addr, Arbiter, AsyncContext, Handler};
 use log::info;
 use std::collections::BTreeMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
+use glib::ObjectExt;
 use gstreamer;
 use gstreamer::{ElementExt, ElementExtManual, GstBinExt, PadExt, PadExtManual};
 
 pub struct Channel {
-    users: Mutex<BTreeMap<String, user::User>>,
+    users: Arc<Mutex<BTreeMap<String, user::User>>>,
     peers: Mutex<BTreeMap<String, user::User>>,
-    pipeline_gstreamer: Mutex<webrtc::GstreamerPipeline>,
+    pipeline_gstreamer: Arc<Mutex<webrtc::GstreamerPipeline>>,
 }
 
 impl Channel {
     pub fn new(room_name: &str) -> Addr<Channel> {
         let pipeline = gstreamer::Pipeline::new(Some(room_name));
-        let pipeline_gstreamer = Mutex::new(webrtc::GstreamerPipeline { pipeline: pipeline });
+        let pipeline_gstreamer =
+            Arc::new(Mutex::new(webrtc::GstreamerPipeline { pipeline: pipeline }));
         let channel = Channel {
-            users: Mutex::new(BTreeMap::new()),
+            users: Arc::new(Mutex::new(BTreeMap::new())),
             peers: Mutex::new(BTreeMap::new()),
             pipeline_gstreamer: pipeline_gstreamer,
         };
-
         channel.start()
+    }
+
+    async fn heartbeat(
+        arc_users: Arc<Mutex<BTreeMap<String, user::User>>>,
+        pipeline_gstreamer: Arc<Mutex<webrtc::GstreamerPipeline>>,
+    ) {
+        for (uuid, user) in arc_users.lock().unwrap().iter() {
+            let pipeline = pipeline_gstreamer.lock().unwrap();
+
+            let uuid_clone = uuid.clone();
+            let room_name_clone = user.room_name.clone();
+            let room_address_clone = user.room_address.clone();
+            let promise = gstreamer::Promise::with_change_func(move |reply| {
+                if reply.unwrap().unwrap().n_fields() < 7 {
+                    let user_disconnected_json_message =
+                        serde_json::to_string(&message_websocket::UserStatus {
+                            action: "UserLeave",
+                            uuid: &uuid_clone,
+                        })
+                        .unwrap();
+
+                    info!("[OFFLINE] [{}]", uuid_clone);
+                    room_address_clone.do_send(room::Broadcast {
+                        uuid: uuid_clone,
+                        room_name: room_name_clone,
+                        message: user_disconnected_json_message,
+                    });
+                }
+            });
+            let webrtcbin = pipeline
+                .pipeline
+                .get_by_name(&format!("{}_webrtcbin", uuid))
+                .unwrap();
+            webrtcbin
+                .emit("get-stats", &[&None::<gstreamer::Pad>, &promise])
+                .unwrap();
+        }
     }
 
     fn create_fakeaudio(&self, uuid: &str) -> gstreamer::Bin {
@@ -232,6 +273,15 @@ impl Channel {
 
 impl Actor for Channel {
     type Context = actix::Context<Self>;
+
+    fn started(&mut self, context: &mut Self::Context) {
+        context.run_interval(Duration::from_millis(5000), |this, _ctx| {
+            Arbiter::spawn(Channel::heartbeat(
+                this.users.clone(),
+                this.pipeline_gstreamer.clone(),
+            ));
+        });
+    }
 }
 
 impl Handler<webrtc::RequestPair> for Channel {
