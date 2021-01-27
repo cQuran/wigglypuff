@@ -100,9 +100,10 @@ impl Channel {
         let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
 
         let user = gstreamer::parse_bin_from_description(&format!(
-            "rtpopuspay name={uuid}_rtpopuspay pt=97 ! webrtcbin name={uuid}_webrtcbin bundle-policy=max-bundle stun-server={stun_server}",
+            "rtpopuspay name={uuid}_rtpopuspay pt=97 ! webrtcbin name={uuid}_webrtcbin bundle-policy=max-bundle stun-server={stun_server} turn-server={turn_server}",
             uuid = uuid,
-            stun_server = constants::STUN_SERVER
+            stun_server = constants::STUN_SERVER,
+            turn_server = constants::TURN_SERVER,
         ), false).unwrap();
 
         let rtpopuspay = user
