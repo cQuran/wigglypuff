@@ -29,6 +29,9 @@ gstreamer-sdp = "0.16"
 
 anyhow = "1"
 glib = "0.10.3"
+sentry = "0.21.0"
+sentry-actix = "0.21.0"
+
 
 [profile.release]
 opt-level = 3
