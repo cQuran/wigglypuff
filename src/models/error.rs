@@ -2,6 +2,7 @@ use actix_web::http::StatusCode;
 use actix_web::{HttpResponse, ResponseError};
 use serde::Serialize;
 use thiserror::Error;
+use sentry::Level;
 
 #[derive(Error, Debug)]
 pub enum WigglypuffError {
@@ -40,6 +41,7 @@ impl ResponseError for WigglypuffError {
     }
 
     fn error_response(&self) -> HttpResponse {
+        sentry::capture_message("Something is not well", Level::Warning);
         let status_code = self.status_code();
         let error_response = ErrorResponse {
             message: self.to_string(),
