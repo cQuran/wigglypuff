@@ -309,6 +309,7 @@ impl Handler<webrtc::RequestPair> for Channel {
             peers.insert(peer_key, new_user);
         }
         drop(peers);
+        self.play_pipeline();
         let mut peers = self.peers.lock().unwrap();
         if let Some(user_src) = users.get(&user.uuid) {
             let peer_key = format!("src:{}_sink:{}", user.uuid, user.from_uuid);
@@ -323,6 +324,7 @@ impl Handler<webrtc::RequestPair> for Channel {
             peers.insert(peer_key, new_user);
         }
         drop(peers);
+        self.play_pipeline();
     }
 }
 impl Handler<supervisor::RegisterUser> for Channel {
