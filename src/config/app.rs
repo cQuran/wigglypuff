@@ -1,4 +1,4 @@
-use crate::api::{fcm_controller, nat_controller, room_controller, static_web_controller};
+use crate::api::{nat_controller, room_controller, static_web_controller};
 use crate::constants;
 
 use actix_web::{error, guard, web, HttpResponse};
@@ -17,11 +17,6 @@ pub fn config_services(config: &mut web::ServiceConfig) {
                                     .route(web::get().to(nat_controller::get_stun_address)),
                             ),
                         )
-                        .service(web::scope("/firebase_cloud_message").service(
-                            web::resource("").route(
-                                web::get().to(fcm_controller::get_firebase_cloud_message_token),
-                            ),
-                        )),
                 )
                 .service(
                     web::scope("/user").service(
