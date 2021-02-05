@@ -276,12 +276,12 @@ impl Actor for Channel {
     type Context = actix::Context<Self>;
 
     fn started(&mut self, context: &mut Self::Context) {
-        context.run_interval(Duration::from_millis(5000), |this, _ctx| {
-            Arbiter::spawn(Channel::heartbeat(
-                this.users.clone(),
-                this.pipeline_gstreamer.clone(),
-            ));
-        });
+        // context.run_interval(Duration::from_millis(5000), |this, _ctx| {
+        //     Arbiter::spawn(Channel::heartbeat(
+        //         this.users.clone(),
+        //         this.pipeline_gstreamer.clone(),
+        //     ));
+        // });
     }
 }
 
@@ -309,7 +309,6 @@ impl Handler<webrtc::RequestPair> for Channel {
             peers.insert(peer_key, new_user);
         }
         drop(peers);
-        self.play_pipeline();
         let mut peers = self.peers.lock().unwrap();
         if let Some(user_src) = users.get(&user.uuid) {
             let peer_key = format!("src:{}_sink:{}", user.uuid, user.from_uuid);
@@ -324,7 +323,6 @@ impl Handler<webrtc::RequestPair> for Channel {
             peers.insert(peer_key, new_user);
         }
         drop(peers);
-        self.play_pipeline();
     }
 }
 impl Handler<supervisor::RegisterUser> for Channel {
@@ -342,7 +340,6 @@ impl Handler<supervisor::RegisterUser> for Channel {
         )
         .unwrap();
         users.insert(user.uuid, new_user);
-
         self.play_pipeline();
     }
 }

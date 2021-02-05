@@ -1,13 +1,15 @@
+use crate::constants;
 use crate::models::{message_websocket, webrtc};
 use crate::service::room as service_room;
+
 use actix::Addr;
 use anyhow::Error;
 use glib::ToValue;
+use glib::Value;
 use gstreamer;
 use gstreamer::{prelude::ObjectExt, ElementExt, GstBinExt, PadExt, PadExtManual};
 use log::info;
 use std::sync::{Arc, Weak};
-
 macro_rules! upgrade_app_weak_reference {
     ($x:ident, $r:expr) => {{
         match $x.upgrade_to_strong_reference() {
@@ -164,6 +166,12 @@ impl User {
             .get_by_name(&format!("{}_webrtcbin", self.uuid))
             .expect("can't find webrtcbin");
 
+        webrtcbin
+            .emit("add-turn-server", &[&Value::from(constants::TURN_SERVER_2)])
+            .unwrap();
+        webrtcbin
+            .emit("add-turn-server", &[&Value::from(constants::TURN_SERVER_3)])
+            .unwrap();
         if let Ok(transceiver) = webrtcbin.emit("get-transceiver", &[&0.to_value()]) {
             if let Some(t) = transceiver {
                 if let Ok(obj) = t.get::<glib::Object>() {

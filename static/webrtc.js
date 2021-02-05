@@ -1,5 +1,28 @@
 var wigglypuffConnection;
-var rtcConfiguration = { iceServers: [{ urls: "stun:global.stun.twilio.com:3478?transport=udp" }] };
+var rtcConfiguration = {
+    iceServers: [{
+        url: "stun:global.stun.twilio.com:3478?transport=udp",
+        urls: "stun:global.stun.twilio.com:3478?transport=udp"
+    },
+    {
+        url: "turn:global.turn.twilio.com:3478?transport=udp",
+        username: "628db864f24ce4b571684ff1bd8a6551675007b98790aedfe75c818837d48bc9",
+        urls: "turn:global.turn.twilio.com:3478?transport=udp",
+        credential: "aGW9tjvyPDe2PuxY47GseEo5QyZIWFzgPB31bLlXy/I="
+    },
+    {
+        url: "turn:global.turn.twilio.com:3478?transport=tcp",
+        username: "628db864f24ce4b571684ff1bd8a6551675007b98790aedfe75c818837d48bc9",
+        urls: "turn:global.turn.twilio.com:3478?transport=tcp",
+        credential: "aGW9tjvyPDe2PuxY47GseEo5QyZIWFzgPB31bLlXy/I="
+    },
+    {
+        url: "turn:global.turn.twilio.com:443?transport=tcp",
+        username: "628db864f24ce4b571684ff1bd8a6551675007b98790aedfe75c818837d48bc9",
+        urls: "turn:global.turn.twilio.com:443?transport=tcp",
+        credential: "aGW9tjvyPDe2PuxY47GseEo5QyZIWFzgPB31bLlXy/I="
+    }]
+};
 let uuid = makeid(5);
 var uuid_new;
 
