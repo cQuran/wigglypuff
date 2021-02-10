@@ -1,5 +1,4 @@
-use crate::constants;
-use crate::models::{message_websocket, webrtc};
+use crate::models::{message_websocket, network_transversal, webrtc};
 use crate::service::room as service_room;
 
 use actix::Addr;
@@ -27,6 +26,7 @@ pub struct UserInner {
     pub room_name: String,
     pub uuid: String,
     pub pipeline: webrtc::UserPipeline,
+    pub nats: Vec<network_transversal::STUNTURN>,
 }
 
 #[derive(Clone)]
@@ -55,6 +55,7 @@ impl User {
         requst_room_name: &String,
         request_uuid: &String,
         pipeline: webrtc::UserPipeline,
+        nats: Vec<network_transversal::STUNTURN>,
     ) -> Result<Self, Error> {
         info!(
             "[ROOM: {}] [UUID: {}] [CREATING WEBRTC INSTANCE] ",
@@ -68,6 +69,7 @@ impl User {
             room_name,
             uuid,
             pipeline,
+            nats,
         }));
 
         let user_clone = user.downgrade_to_weak_reference();
@@ -166,11 +168,70 @@ impl User {
             .get_by_name(&format!("{}_webrtcbin", self.uuid))
             .expect("can't find webrtcbin");
 
+        let turn_address_0 = match &self.nats[1] {
+            network_transversal::STUNTURN::TURN {
+                url,
+                urls,
+                username,
+                credential,
+            } => Some(url.clone().replace(
+                "turn:",
+                &format!(
+                    "turn://{username}:{credential}@",
+                    username = username,
+                    credential = credential
+                ),
+            )),
+            _ => None,
+        };
+
+        let turn_address_1 = match &self.nats[2] {
+            network_transversal::STUNTURN::TURN {
+                url,
+                urls,
+                username,
+                credential,
+            } => Some(url.clone().replace(
+                "turn:",
+                &format!(
+                    "turn://{username}:{credential}@",
+                    username = username,
+                    credential = credential
+                ),
+            )),
+            _ => None,
+        };
+
+        let turn_address_2 = match &self.nats[3] {
+            network_transversal::STUNTURN::TURN {
+                url,
+                urls,
+                username,
+                credential,
+            } => Some(url.clone().replace(
+                "turn:",
+                &format!(
+                    "turn://{username}:{credential}@",
+                    username = username,
+                    credential = credential
+                ),
+            )),
+            _ => None,
+        };
+
+        let turn_address_0 = turn_address_0.unwrap();
+        let turn_address_1 = turn_address_1.unwrap();
+        let turn_address_2 = turn_address_2.unwrap();
+        info!("{}", turn_address_1);
+        info!("{}", turn_address_2);
         webrtcbin
-            .emit("add-turn-server", &[&Value::from(constants::TURN_SERVER_2)])
+            .emit("add-turn-server", &[&Value::from(turn_address_0.as_str())])
             .unwrap();
         webrtcbin
-            .emit("add-turn-server", &[&Value::from(constants::TURN_SERVER_3)])
+            .emit("add-turn-server", &[&Value::from(turn_address_1.as_str())])
+            .unwrap();
+        webrtcbin
+            .emit("add-turn-server", &[&Value::from(turn_address_2.as_str())])
             .unwrap();
         if let Ok(transceiver) = webrtcbin.emit("get-transceiver", &[&0.to_value()]) {
             if let Some(t) = transceiver {

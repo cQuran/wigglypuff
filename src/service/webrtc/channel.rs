@@ -1,27 +1,26 @@
-use crate::constants;
 use crate::models::message_websocket;
+use crate::models::network_transversal;
 use crate::models::room;
 use crate::models::supervisor;
 use crate::models::webrtc;
 use crate::service::webrtc::user;
-use actix::{Actor, Addr, Arbiter, AsyncContext, Handler};
-use log::info;
-use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-
+use actix::{Actor, Addr, Handler};
 use glib::ObjectExt;
 use gstreamer;
 use gstreamer::{ElementExt, ElementExtManual, GstBinExt, PadExt, PadExtManual};
+use log::info;
+use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
 
 pub struct Channel {
     users: Arc<Mutex<BTreeMap<String, user::User>>>,
     peers: Mutex<BTreeMap<String, user::User>>,
     pipeline_gstreamer: Arc<Mutex<webrtc::GstreamerPipeline>>,
+    nats: Vec<network_transversal::STUNTURN>,
 }
 
 impl Channel {
-    pub fn new(room_name: &str) -> Addr<Channel> {
+    pub fn new(room_name: &str, nats: Vec<network_transversal::STUNTURN>) -> Addr<Channel> {
         let pipeline = gstreamer::Pipeline::new(Some(room_name));
         let pipeline_gstreamer =
             Arc::new(Mutex::new(webrtc::GstreamerPipeline { pipeline: pipeline }));
@@ -29,6 +28,7 @@ impl Channel {
             users: Arc::new(Mutex::new(BTreeMap::new())),
             peers: Mutex::new(BTreeMap::new()),
             pipeline_gstreamer: pipeline_gstreamer,
+            nats: nats,
         };
         channel.start()
     }
@@ -39,7 +39,6 @@ impl Channel {
     ) {
         for (uuid, user) in arc_users.lock().unwrap().iter() {
             let pipeline = pipeline_gstreamer.lock().unwrap();
-
             let uuid_clone = uuid.clone();
             let room_name_clone = user.room_name.clone();
             let room_address_clone = user.room_address.clone();
@@ -99,11 +98,19 @@ impl Channel {
     fn create_webrtcbin(&self, uuid: &str) -> gstreamer::Bin {
         let pipeline_gstreamer = self.pipeline_gstreamer.lock().unwrap();
 
+        let stun_address = match &self.nats[0] {
+            network_transversal::STUNTURN::STUN { url, .. } => {
+                Some(url.clone().replace("stun:", "stun://"))
+            }
+            _ => None,
+        };
+        let stun_address = stun_address.unwrap();
+        info!("{}", stun_address);
+
         let user = gstreamer::parse_bin_from_description(&format!(
-            "rtpopuspay name={uuid}_rtpopuspay pt=97 ! webrtcbin name={uuid}_webrtcbin bundle-policy=max-bundle stun-server={stun_server} turn-server={turn_server}",
+            "rtpopuspay name={uuid}_rtpopuspay pt=97 ! webrtcbin name={uuid}_webrtcbin bundle-policy=max-bundle stun-server={stun_server}",
             uuid = uuid,
-            stun_server = constants::STUN_SERVER,
-            turn_server = constants::TURN_SERVER,
+            stun_server = stun_address,
         ), false).unwrap();
 
         let rtpopuspay = user
@@ -275,7 +282,7 @@ impl Channel {
 impl Actor for Channel {
     type Context = actix::Context<Self>;
 
-    fn started(&mut self, context: &mut Self::Context) {
+    fn started(&mut self, _context: &mut Self::Context) {
         // context.run_interval(Duration::from_millis(5000), |this, _ctx| {
         //     Arbiter::spawn(Channel::heartbeat(
         //         this.users.clone(),
@@ -299,30 +306,45 @@ impl Handler<webrtc::RequestPair> for Channel {
         if let Some(user_src) = users.get(&user.from_uuid) {
             let peer_key = format!("src:{}_sink:{}", user.from_uuid, user.uuid);
             let user_pipeline = self.build_consumer(&peer_key, &user_src.pipeline.tee);
+            let nats: Vec<network_transversal::STUNTURN> = self
+                .nats
+                .iter()
+                .map(|room_name| room_name.clone())
+                .collect();
             let new_user = user::User::new(
                 user_src.room_address.clone(),
                 &user.room_name,
                 &peer_key,
                 user_pipeline,
+                nats,
             )
             .unwrap();
             peers.insert(peer_key, new_user);
         }
         drop(peers);
+        self.play_pipeline();
         let mut peers = self.peers.lock().unwrap();
         if let Some(user_src) = users.get(&user.uuid) {
             let peer_key = format!("src:{}_sink:{}", user.uuid, user.from_uuid);
             let user_pipeline = self.build_consumer(&peer_key, &user_src.pipeline.tee);
+
+            let nats: Vec<network_transversal::STUNTURN> = self
+                .nats
+                .iter()
+                .map(|room_name| room_name.clone())
+                .collect();
             let new_user = user::User::new(
                 user_src.room_address.clone(),
                 &user.room_name,
                 &peer_key,
                 user_pipeline,
+                nats,
             )
             .unwrap();
             peers.insert(peer_key, new_user);
         }
         drop(peers);
+        self.play_pipeline();
     }
 }
 impl Handler<supervisor::RegisterUser> for Channel {
@@ -332,11 +354,17 @@ impl Handler<supervisor::RegisterUser> for Channel {
         let mut users = self.users.lock().unwrap();
 
         let user_pipeline = self.build_producer(&user.uuid);
+        let nats: Vec<network_transversal::STUNTURN> = self
+            .nats
+            .iter()
+            .map(|room_name| room_name.clone())
+            .collect();
         let new_user = user::User::new(
             user.room_address.clone(),
             &user.room_name,
             &user.uuid,
             user_pipeline,
+            nats,
         )
         .unwrap();
         users.insert(user.uuid, new_user);

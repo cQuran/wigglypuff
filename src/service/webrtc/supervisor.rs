@@ -1,12 +1,15 @@
+use crate::models::network_transversal;
 use crate::models::supervisor;
 use crate::models::webrtc;
 use crate::service::webrtc::channel;
 use actix::{Actor, Addr, Context, Handler};
 use log::info;
 use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
 
 pub struct Supervisor {
     channels: BTreeMap<String, Addr<channel::Channel>>,
+    nats: Arc<Mutex<Vec<network_transversal::STUNTURN>>>,
 }
 
 impl Actor for Supervisor {
@@ -14,9 +17,10 @@ impl Actor for Supervisor {
 }
 
 impl Supervisor {
-    pub fn new() -> Addr<Supervisor> {
+    pub fn new(nats: Arc<Mutex<Vec<network_transversal::STUNTURN>>>) -> Addr<Supervisor> {
         let supervisor = Supervisor {
             channels: BTreeMap::new(),
+            nats: nats,
         };
         supervisor.start()
     }
@@ -28,7 +32,14 @@ impl Handler<supervisor::RegisterUser> for Supervisor {
     fn handle(&mut self, user: supervisor::RegisterUser, _: &mut Context<Self>) {
         let room_name = user.room_name.clone();
         if !self.channels.contains_key(&room_name) {
-            let channel = channel::Channel::new(&room_name.clone());
+            let nat_address = self.nats.lock().unwrap();
+
+            let nats: Vec<network_transversal::STUNTURN> = nat_address
+                .iter()
+                .map(|room_name| room_name.clone())
+                .collect();
+
+            let channel = channel::Channel::new(&room_name.clone(), nats);
             channel.do_send(user);
             self.channels.insert(room_name.clone(), channel);
         } else {

@@ -17,6 +17,12 @@ pub fn config_services(config: &mut web::ServiceConfig) {
                                     .route(web::get().to(nat_controller::get_stun_address)),
                             ),
                         )
+                        .service(
+                            web::scope("/refresh/network_transversal").service(
+                                web::resource("")
+                                    .route(web::post().to(nat_controller::refresh_twilio)),
+                            ),
+                        )
                 )
                 .service(
                     web::scope("/user").service(

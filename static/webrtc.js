@@ -1,28 +1,12 @@
 var wigglypuffConnection;
-var rtcConfiguration = {
-    iceServers: [{
-        url: "stun:global.stun.twilio.com:3478?transport=udp",
-        urls: "stun:global.stun.twilio.com:3478?transport=udp"
-    },
-    {
-        url: "turn:global.turn.twilio.com:3478?transport=udp",
-        username: "628db864f24ce4b571684ff1bd8a6551675007b98790aedfe75c818837d48bc9",
-        urls: "turn:global.turn.twilio.com:3478?transport=udp",
-        credential: "aGW9tjvyPDe2PuxY47GseEo5QyZIWFzgPB31bLlXy/I="
-    },
-    {
-        url: "turn:global.turn.twilio.com:3478?transport=tcp",
-        username: "628db864f24ce4b571684ff1bd8a6551675007b98790aedfe75c818837d48bc9",
-        urls: "turn:global.turn.twilio.com:3478?transport=tcp",
-        credential: "aGW9tjvyPDe2PuxY47GseEo5QyZIWFzgPB31bLlXy/I="
-    },
-    {
-        url: "turn:global.turn.twilio.com:443?transport=tcp",
-        username: "628db864f24ce4b571684ff1bd8a6551675007b98790aedfe75c818837d48bc9",
-        urls: "turn:global.turn.twilio.com:443?transport=tcp",
-        credential: "aGW9tjvyPDe2PuxY47GseEo5QyZIWFzgPB31bLlXy/I="
-    }]
-};
+var rtcConfiguration;
+
+// STUN & TURN SERVER
+fetch(window.location.protocol + "//" + window.location.host + "/api/info/network_transversal")
+    .then(response => response.json()).then(value=>{
+        rtcConfiguration = value;
+        console.log(rtcConfiguration);
+    });
 let uuid = makeid(5);
 var uuid_new;
 
@@ -174,7 +158,8 @@ function wigglypuffConnect() {
     }
     new_uri += "//" + loc.host;
 
-    var wigglypuffUrl = new_uri + '/websocket/dssn/' + uuid;
+    let room_name = 'dssn';
+    var wigglypuffUrl = new_uri + '/websocket/' + room_name + '/' + uuid;
     wigglypuffConnection = new WebSocket(wigglypuffUrl);
     wigglypuffConnection.addEventListener('open', onWigglypuffConnect);
     wigglypuffConnection.addEventListener('error', onWigglypuffError);
