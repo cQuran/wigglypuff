@@ -1,19 +1,15 @@
-# Wigglypuff
-<p align="center">
-  <img width="40%" height="40%" src="assets/wigglypuff.png">
-</p>
-
+# WigglIO
 **`API Documentation`** |
 ------------------- |
 [![Documentation](https://img.shields.io/badge/api-documentation-pink.svg)](http://bit.ly/WigglypuffAPI) |
 
-Wigglypuff is an end-to-end webrtc Signalling & Audio Media Server service. Wigglypuff was designed for flexibility and modularity. The bulk of the API layer is implemented in Rust, making it super fast to modify and extend with new functionality.
+WigglIO is an end-to-end webrtc Signalling & Audio Media Server service. Wigglypuff was designed for flexibility and modularity. The bulk of the API layer is implemented in Rust, making it super fast to modify and extend with new functionality.
 </br>
 </br>
 Wigglypuff is built on the belief that the WebRTC standard would transcend the pure browser environment and that native apps, implementing the same protocols and API's, would become an important part of the WebRTC ecosystem. This is especially true on mobile platforms where native app distribution is often preferred over pure web apps. Wigglypuff provide the WebRTC-backend to web browsers.
 </br>
 </br>
-Having independent, interoperable, implementations is important for the health of any standard, and WebRTC is no exception. The ambition of Wigglypuff is to follow the WebRTC standard closely as it continues to evolve.
+Having independent, interoperable, implementations is important for the health of any standard, and WebRTC is no exception. The ambition of WigglIO is to follow the WebRTC standard closely as it continues to evolve.
 
 # Run
 To run the development mode, we recommend to use Debian Slim Buster:
@@ -36,7 +32,7 @@ wigglypuff
 ![arch](assets/mobile.png)
 ## Contribution guidelines
 
-**If you want to contribute to Wigglypuff, be sure to review the
+**If you want to contribute to WigglIO, be sure to review the
 [contribution guidelines](CONTRIBUTING.md). This project adheres to Wigglypuff's
 [code of conduct](CODE_OF_CONDUCT.md). By participating, you are expected to
 uphold this code.**
